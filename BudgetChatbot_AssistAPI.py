@@ -133,8 +133,17 @@ if prompt := st.chat_input(chatInputPlaceholder):
         # Add footnotes to the end of the message before displaying to user
         message_content.value += '\n\n' + '\n'.join(citations)
 
-        # Occasionally the markdown or write doesn't format the text properly due to latex formatting issues
+        # Prevent latex formatting by escaping $ sign
+        message_content.value = message_content.value.replace('$','\\$')
+
+        # Display assistant message
         st.markdown(message_content.value)
+
+        # Testing the latex formatting removal
+        # str = "The budget is $1,246,568 for the year of 2024, an increase of $100,000 from last year"
+        # st.markdown(str)
+        # str = str.replace('$','\\$')
+        # st.markdown(str)
 
         # Save the assistant's message in session state
         st.session_state.messages.append({"role": "assistant", "content": message_content.value})
