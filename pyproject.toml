@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "lexbudget"
+version = "0.1.0"
+description = "Conversational assistant for Lexington, MA town records."
+authors = []
+readme = "README.md"
+repository = "https://github.com/Brainana/LexBudget"
+
+[tool.poetry.dependencies]
+python = ">= 3.9.8, < 4.0"
+openai = ">= 1.6.1, < 2"
+streamlit = ">= 1.29.0, < 2"
+
+[tool.poetry.group.test.dependencies]
+pytest = "^7.2.0"
+pytest-cov = "^4.0.0"
+
+[tool.poetry.group.lint.dependencies]
+black = "^22.10.0"
+isort = "^5.10.1"
+flake8 = "^6.0.0"
+
+[tool.poetry.group.typing.dependencies]
+mypy = "^0.991"
+
+[tool.isort]
+profile = "black"
+src_paths = ["lexbudget"]
+
+[tool.mypy]
+ignore_missing_imports = "True"
+disallow_untyped_defs = "True"
+exclude = ["tests"]
