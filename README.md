@@ -1,7 +1,7 @@
 # LexBudget
 **Setup Local Dev Environment**
   - Install Python and PIP on the local system
-  - We’ll be using poetry for dependency management: install poetry with the command “pip install poetry”. Further basic usage information is here.
+  - We’ll be using [poetry](https://python-poetry.org/) for dependency management: install poetry with the command “pip install poetry”. Further basic usage information is [here](https://python-poetry.org/docs/basic-usage/).
   - Git clone from this repository: https://github.com/Brainana/LexBudget
   - Modify .streamlit/secrets.toml to use your own ChatGPT API key
   - If you already have a ChatGPT assistant created with the necessary files, then simply modify config.ini to use your own assistant id. Otherwise, you can create a new assistant with the command "python scripts/create_assistant.py --directory /path/to/directory/ --extension pdf"
