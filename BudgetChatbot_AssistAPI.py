@@ -34,10 +34,10 @@ assistantAvatar = config.get('Template', 'assistantAvatar')
 for message in st.session_state.messages:
     if message["role"] == "assistant":
         with st.chat_message(message["role"], avatar=assistantAvatar):
-            st.markdown(message["content"])
+            st.markdown(message["content"], unsafe_allow_html=True)
     else:
         with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+            st.markdown(message["content"], unsafe_allow_html=True)
 
 # We use a predefined assistant with uploaded files
 # Should not create a new assistant every time the server starts
@@ -118,26 +118,28 @@ if prompt := st.chat_input(chatInputPlaceholder):
         # Iterate over the annotations and add footnotes
         for index, annotation in enumerate(annotations):
             # Replace the annotations with a footnote
-            message_content.value = message_content.value.replace(annotation.text, f' [{index}]')
+            message_content.value = message_content.value.replace(annotation.text, f'<sup><a href="#cite_note-{message.id}-{index}">[{index}]</a></sup>')
 
             # Gather citations based on annotation attributes
             if (file_citation := getattr(annotation, 'file_citation', None)):
                 try:
                     cited_file = client.files.retrieve(file_citation.file_id)
-                    citations.append(f'[{index}]: from {cited_file.filename} \n\n{file_citation.quote}')
+                    citations.append(f'<div id="cite_note-{message.id}-{index}" style="font-size: 90%">[{index}]: {cited_file.filename} <br><br> {file_citation.quote}</div>')
                 except Exception as err:
                     print("Oops! There is an error getting the citation information")
                     print(f"Unexpected {err=}, {type(err)=}")
                     file_citation
  
         # Add footnotes to the end of the message before displaying to user
-        message_content.value += '\n\n' + '\n'.join(citations)
+        if len(citations) > 0:
+            message_content.value += '<h5 style="border-bottom: 1px solid">References</h5>'
+            message_content.value += '\n\n' + '\n'.join(citations)
 
         # Prevent latex formatting by escaping $ sign
-        message_content.value = message_content.value.replace('$','\\$')
+        message_content.value = message_content.value.replace('$','&dollar;')
 
         # Display assistant message
-        st.markdown(message_content.value)
+        st.markdown(message_content.value, unsafe_allow_html=True)
 
         # Testing the latex formatting removal
         # str = "The budget is $1,246,568 for the year of 2024, an increase of $100,000 from last year"
