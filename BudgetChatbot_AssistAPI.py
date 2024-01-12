@@ -40,7 +40,7 @@ for message in st.session_state.messages:
             st.markdown(message["content"], unsafe_allow_html=True)
 
 # We use a predefined assistant with uploaded files
-# Should not create a new assistant every time the server starts
+# Should not create a new assistant every time the page refreshes
 assistantId=config.get('OpenAI', 'assistantId')
 
 # Display the input text box
@@ -117,35 +117,31 @@ if prompt := st.chat_input(chatInputPlaceholder):
 
         # Iterate over the annotations and add footnotes
         for index, annotation in enumerate(annotations):
-            # Replace the annotations with a footnote
-            message_content.value = message_content.value.replace(annotation.text, f'<sup><a href="#cite_note-{message.id}-{index}">[{index}]</a></sup>')
 
             # Gather citations based on annotation attributes
             if (file_citation := getattr(annotation, 'file_citation', None)):
-                try:
+                if not file_citation.file_id:
+                    # Do not provide footnote if file id of citation is empty
+                    message_content.value = message_content.value.replace(annotation.text, '')
+                else:
+                    # Replace the annotations with a footnote
+                    message_content.value = message_content.value.replace(annotation.text, f' <sup><a href="#cite_note-{message.id}-{index}">[{index}]</a></sup>')
                     cited_file = client.files.retrieve(file_citation.file_id)
                     citations.append(f'<div id="cite_note-{message.id}-{index}" style="font-size: 90%">[{index}]: {cited_file.filename} <br><br> {file_citation.quote}</div>')
-                except Exception as err:
-                    print("Oops! There is an error getting the citation information")
-                    print(f"Unexpected {err=}, {type(err)=}")
-                    file_citation
+            else:
+                # Do not provide footnote if file for citation cannot be found
+                message_content.value = message_content.value.replace(annotation.text, '')
  
         # Add footnotes to the end of the message before displaying to user
         if len(citations) > 0:
             message_content.value += '<h5 style="border-bottom: 1px solid">References</h5>'
             message_content.value += '\n\n' + '\n'.join(citations)
 
-        # Prevent latex formatting by escaping $ sign
+        # Prevent latex formatting by replacing $ with html dollar literal
         message_content.value = message_content.value.replace('$','&dollar;')
 
         # Display assistant message
         st.markdown(message_content.value, unsafe_allow_html=True)
-
-        # Testing the latex formatting removal
-        # str = "The budget is $1,246,568 for the year of 2024, an increase of $100,000 from last year"
-        # st.markdown(str)
-        # str = str.replace('$','\\$')
-        # st.markdown(str)
 
         # Save the assistant's message in session state
         st.session_state.messages.append({"role": "assistant", "content": message_content.value})
