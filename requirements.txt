@@ -68,7 +68,6 @@ PyInstaller==6.3.0
 pylama==8.4.1
 pyOpenSSL==24.0.0
 pyperf==2.6.2
-PyQt4==4.11.4
 PyQt5==5.15.10
 PyQt6==6.6.1
 PySide6==6.6.1
