@@ -16,7 +16,7 @@ checks==0.2
 ConfigParser==6.0.0
 contextlib2==21.6.0
 cryptography==42.0.2
-ctypes_snappy==1.03
+ctypes_snappy==1.0
 curio==1.6
 cycler==0.12.1
 Cython==3.0.8
