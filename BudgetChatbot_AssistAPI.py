@@ -2,6 +2,8 @@ from openai import OpenAI
 import streamlit as st
 import configparser
 import time
+# import regex library
+import re
 
 # Get the specific configuration for the app
 config = configparser.ConfigParser()
@@ -114,6 +116,11 @@ if prompt := st.chat_input(chatInputPlaceholder):
         message_content = message.content[0].text
         annotations = message_content.annotations
         citations = []
+
+        # When there are multiple files associated with an assistant, annotations will return as empty: 
+        # see https://community.openai.com/t/assistant-api-always-return-empty-annotations/489285
+        if len(annotations) == 0:
+            message_content.value = re.sub(r'【\d+†source】', '', message_content.value)
 
         # Iterate over the annotations and add footnotes
         for index, annotation in enumerate(annotations):
