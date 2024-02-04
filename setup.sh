@@ -1,16 +1,16 @@
-mkdir -p ~/.streamlit/
+# mkdir -p ~/.streamlit/
 
-echo "\
-[general]\n\
-email = \"your-email@domain.com\"\n\
-" > ~/.streamlit/credentials.toml
+# echo "\
+# [general]\n\
+# email = \"your-email@domain.com\"\n\
+# " > ~/.streamlit/credentials.toml
 
-echo "\
-[server]\n\
-headless = true\n\
-enableCORS=false\n\
-port = $PORT\n\
-" > ~/.streamlit/config.toml
+# echo "\
+# [server]\n\
+# headless = false\n\
+# enableCORS=true\n\
+# port = $PORT\n\
+# " > ~/.streamlit/config.toml
 
 open_ai_api_key=`heroku config:get OPENAI_API_KEY`
 sed -i "s/your-api-key-here/$open_ai_api_key/g" ./.streamlit/secrets.toml
