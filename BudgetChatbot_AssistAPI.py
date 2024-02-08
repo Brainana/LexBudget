@@ -2,6 +2,11 @@ from openai import OpenAI
 import streamlit as st
 import configparser
 import time
+from datetime import datetime
+import pytz
+# import libraries for user feedback
+from trubrics.integrations.streamlit import FeedbackCollector
+from streamlit_feedback import streamlit_feedback
 # import regex library
 import re
 
@@ -17,6 +22,30 @@ st.title(config.get('Template', 'title'))
 
 # Initialize OpenAI client with your own API key
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+# Initialize feedback collector
+collector = FeedbackCollector(
+    project="default",
+    email=st.secrets.TRUBRICS_EMAIL,
+    password=st.secrets.TRUBRICS_PASSWORD,
+)
+
+# handle feedback submissions
+def _submit_feedback():
+    st.session_state.feedback_key['text'] = st.session_state.feedback_response
+    collector.log_feedback(
+        component="default",
+        model=st.session_state.logged_prompt.config_model.model,
+        user_response=st.session_state.feedback_key,
+        prompt_id=st.session_state.logged_prompt.id
+    )
+
+# Helper function to convert Unix timestamp to datetime object in EST timezone
+def convert_to_est(unix_timestamp):
+    utc_datetime = datetime.utcfromtimestamp(unix_timestamp)
+    est_timezone = pytz.timezone('US/Eastern')
+    est_datetime = utc_datetime.replace(tzinfo=pytz.utc).astimezone(est_timezone)
+    return est_datetime.strftime('%B %d, %Y %H:%M:%S %Z')
 
 # Cache the thread on session state, so we don't keep creating
 # new thread for the same browser session
@@ -51,7 +80,7 @@ if prompt := st.chat_input(chatInputPlaceholder):
     # User has entered a question -> save it to the session state 
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # copy the user's question in the chat window
+    # Copy the user's question in the chat window
     with st.chat_message("user"):
         st.markdown(prompt)
 
@@ -63,7 +92,10 @@ if prompt := st.chat_input(chatInputPlaceholder):
             content=prompt
         )
 
-        # query ChatGPT
+        # Track query start time
+        start_time = time.time()
+
+        # Query ChatGPT
         run = client.beta.threads.runs.create(
             thread_id=thread.id,
             assistant_id=assistantId
@@ -95,6 +127,10 @@ if prompt := st.chat_input(chatInputPlaceholder):
 
         # Remove progress bar
         progressBar.empty()
+
+        # Track query end time
+        end_time = time.time()
+        query_time = end_time - start_time
 
         # Get all messages from the thread
         messages = client.beta.threads.messages.list(
@@ -152,3 +188,47 @@ if prompt := st.chat_input(chatInputPlaceholder):
 
         # Save the assistant's message in session state
         st.session_state.messages.append({"role": "assistant", "content": message_content.value})
+
+        # log user query + assistant response
+        st.session_state.logged_prompt = collector.log_prompt(
+            config_model={"model": "gpt-4-turbo-preview"},
+            prompt=prompt,
+            generation=message_content.value,
+            metadata={
+                "query_time": f"{query_time:.2f} sec",
+                "start_time": convert_to_est(start_time),
+                "end_time": convert_to_est(end_time)
+            }
+        )
+
+        # not functional because user feedback comes back empty
+        # # display feedback ui
+        # user_feedback = collector.st_feedback(
+        #     component="default",
+        #     feedback_type="thumbs",
+        #     model=st.session_state.logged_prompt.config_model.model,
+        #     prompt_id=st.session_state.logged_prompt.id,
+        #     open_feedback_label='[Optional] Provide additional feedback'
+        # )
+
+        # if user_feedback:
+
+        #     # log user feedback
+        #     trubrics.log_feedback(
+        #         component="default",
+        #         model=st.session_state.logged_prompt.config_model.model,
+        #         user_response=user_feedback,
+        #         prompt_id=st.session_state.logged_prompt.id
+        #     )
+
+        with st.form('form'):
+            streamlit_feedback(
+                feedback_type = "thumbs",
+                align = "flex-start",
+                key='feedback_key'
+            )
+            st.text_input(
+                label="Please elaborate on your response.",
+                key="feedback_response"
+            )
+            st.form_submit_button('Submit', on_click=_submit_feedback)
