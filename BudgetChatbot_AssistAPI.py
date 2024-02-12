@@ -199,7 +199,8 @@ if prompt := st.chat_input(chatInputPlaceholder):
             metadata={
                 "query_time": f"{query_time:.2f} sec",
                 "start_time": convert_to_est(start_time),
-                "end_time": convert_to_est(end_time)
+                "end_time": convert_to_est(end_time),
+                "assistant_id": assistantId
             }
         )
 
