@@ -32,6 +32,8 @@ collector = FeedbackCollector(
 
 # handle feedback submissions
 def _submit_feedback():
+    if st.session_state.feedback_key is None:
+        st.session_state.feedback_key = {'type': ""}
     st.session_state.feedback_key['text'] = st.session_state.feedback_response
     collector.log_feedback(
         component="default",
