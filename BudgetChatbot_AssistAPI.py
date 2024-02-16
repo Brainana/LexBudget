@@ -134,20 +134,55 @@ if prompt := st.chat_input(chatInputPlaceholder):
         end_time = time.time()
         query_time = end_time - start_time
 
+        # construct metadata to be logged
+        metadata={
+            "query_time": f"{query_time:.2f} sec",
+            "start_time": convert_to_est(start_time),
+            "end_time": convert_to_est(end_time),
+            "assistant_id": assistantId
+        }
+
         # Get all messages from the thread
         messages = client.beta.threads.messages.list(
-            thread_id=thread.id
-        )
-   
-        # Retrieve the message object from the assistant
-        message = client.beta.threads.messages.retrieve(
             thread_id=thread.id,
-            # Use the latest message from the assistant
-            message_id=messages.data[0].id
+            # make sure thread is ordered with latest messages first
+            order='desc'
         )
+
+        # If latest message is not from assistant, sleep to give Assistants API time to add GPT-4 response to thread
+        if messages.data[0].role != 'assistant':
+            time.sleep(2)
+            messages = client.beta.threads.messages.list(
+                thread_id=thread.id,
+                # Make sure thread is ordered with latest messages first
+                order='desc'
+            )    
+            
+        message = None
+        if messages.data[0].role != 'assistant':
+            errorResponse = """OpenAI's Assistants API failed to return a response, please change your query and try again.<br>
+            Tips to improve your queries:<br>
+            &nbsp;&nbsp;- Provide a specific year or years<br>
+            &nbsp;&nbsp;- Provide a specific area of the town budget<br>
+            &nbsp;&nbsp;- Avoid abbreviations"""
+            metadata["threadmsgs"] = messages
+            # If assistant still doesn't return response, make an error response
+            message = client.beta.threads.messages.create(
+                thread_id=thread.id,
+                role="user",
+                content=errorResponse
+            )
+        else:
+            # Retrieve the message object from the assistant
+            message = client.beta.threads.messages.retrieve(
+                thread_id=thread.id,
+                # Use the latest message from the assistant
+                message_id=messages.data[0].id
+            )
+
         if debug == "true":
-            # Use Streamlit Magic commands, which is a feature that allows the dev to write almost anything
-            # (markdown, data, charts, etc) without having to type an explicit command
+            # Use Streamlit Magic commands to output message, which is a feature that allows dev to write
+            # markdown, data, charts, etc without having to write an explicit command
             message
 
         # Extract the message content
@@ -158,7 +193,7 @@ if prompt := st.chat_input(chatInputPlaceholder):
         # When there are multiple files associated with an assistant, annotations will return as empty: 
         # see https://community.openai.com/t/assistant-api-always-return-empty-annotations/489285
         if len(annotations) == 0:
-            message_content.value = re.sub(r'【\d+†source】', '', message_content.value)
+            message_content.value = re.sub(r'【[\d:]+†source】', '', message_content.value)
 
         # Iterate over the annotations and add footnotes
         for index, annotation in enumerate(annotations):
@@ -188,20 +223,16 @@ if prompt := st.chat_input(chatInputPlaceholder):
         # Display assistant message
         st.markdown(message_content.value, unsafe_allow_html=True)
 
-        # Save the assistant's message in session state
+        # Save the assistant's message in session state (we do this in addition to 
+        # saving the thread because we processed the message after retrieving it, e.g. for citations)
         st.session_state.messages.append({"role": "assistant", "content": message_content.value})
 
-        # log user query + assistant response
+        # log user query + assistant response + metadata
         st.session_state.logged_prompt = collector.log_prompt(
             config_model={"model": "gpt-4-turbo-preview"},
             prompt=prompt,
             generation=message_content.value,
-            metadata={
-                "query_time": f"{query_time:.2f} sec",
-                "start_time": convert_to_est(start_time),
-                "end_time": convert_to_est(end_time),
-                "assistant_id": assistantId
-            }
+            metadata=metadata
         )
 
         # not functional because user feedback comes back empty
