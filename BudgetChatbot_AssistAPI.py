@@ -9,6 +9,8 @@ from trubrics.integrations.streamlit import FeedbackCollector
 from streamlit_feedback import streamlit_feedback
 # import regex library
 import re
+# import serialization/deserialization library
+import pickle
 
 # Get the specific configuration for the app
 config = configparser.ConfigParser()
@@ -49,6 +51,16 @@ def convert_to_est(unix_timestamp):
     est_datetime = utc_datetime.replace(tzinfo=pytz.utc).astimezone(est_timezone)
     return est_datetime.strftime('%B %d, %Y %H:%M:%S %Z')
 
+# serialize object to pickle file
+def serialize(obj, path):
+    with open(path, 'wb') as file:
+        pickle.dump(obj, file)
+
+# deserialize pickle file to object
+def deserialize(path):
+    with open(path, 'rb') as file:
+       return  pickle.load(file)
+
 # Cache the thread on session state, so we don't keep creating
 # new thread for the same browser session
 thread = None
@@ -76,6 +88,9 @@ for message in st.session_state.messages:
 # Should not create a new assistant every time the page refreshes
 assistantId=config.get('OpenAI', 'assistantId')
 
+# Get UITest config
+UITest = config.get('Server', 'UITest')
+
 # Display the input text box
 chatInputPlaceholder = config.get('Template', 'chatInputPlaceholder')
 if prompt := st.chat_input(chatInputPlaceholder):
@@ -94,96 +109,106 @@ if prompt := st.chat_input(chatInputPlaceholder):
             content=prompt
         )
 
-        # Track query start time
-        start_time = time.time()
+        # If UITest is true then use dummy message instead of real message
+        if UITest == "true":
+            message = deserialize('dummyResponse.pickle')
+        else:
 
-        # Query ChatGPT
-        run = client.beta.threads.runs.create(
-            thread_id=thread.id,
-            assistant_id=assistantId
-        )
-        
-        # Check query status
-        runStatus = None
-        # Display progress bar
-        progressText = "Retrieving in progress. Please wait."
-        progressValue = 0
-        progressBar = st.progress(0, text=progressText)
-        while runStatus != "completed":
-            # Update progress bar and make sure it's not exceeding 100
-            if progressValue < 99:
-                progressValue += 1
-            else:
-                progressValue = 1
-            progressBar.progress(progressValue, text=progressText)
-            time.sleep(0.1)
+            # Track query start time
+            start_time = time.time()
 
-            # Keep checking query status
-            run = client.beta.threads.runs.retrieve(
+            # Query ChatGPT
+            run = client.beta.threads.runs.create(
                 thread_id=thread.id,
-                run_id=run.id
+                assistant_id=assistantId
             )
-            if runStatus == "completed":
-                progressBar.progress(100, text=progressText)
-            runStatus = run.status
+            
+            # Check query status
+            runStatus = None
+            # Display progress bar
+            progressText = "Retrieving in progress. Please wait."
+            progressValue = 0
+            progressBar = st.progress(0, text=progressText)
+            while runStatus != "completed":
+                # Update progress bar and make sure it's not exceeding 100
+                if progressValue < 99:
+                    progressValue += 1
+                else:
+                    progressValue = 1
+                progressBar.progress(progressValue, text=progressText)
+                time.sleep(0.1)
 
-        # Remove progress bar
-        progressBar.empty()
+                # Keep checking query status
+                run = client.beta.threads.runs.retrieve(
+                    thread_id=thread.id,
+                    run_id=run.id
+                )
+                if runStatus == "completed":
+                    progressBar.progress(100, text=progressText)
+                runStatus = run.status
 
-        # Track query end time
-        end_time = time.time()
-        query_time = end_time - start_time
+            # Remove progress bar
+            progressBar.empty()
 
-        # construct metadata to be logged
-        metadata={
-            "query_time": f"{query_time:.2f} sec",
-            "start_time": convert_to_est(start_time),
-            "end_time": convert_to_est(end_time),
-            "assistant_id": assistantId
-        }
+            # Track query end time
+            end_time = time.time()
+            query_time = end_time - start_time
 
-        # Get all messages from the thread
-        messages = client.beta.threads.messages.list(
-            thread_id=thread.id,
-            # make sure thread is ordered with latest messages first
-            order='desc'
-        )
+            # construct metadata to be logged
+            metadata={
+                "query_time": f"{query_time:.2f} sec",
+                "start_time": convert_to_est(start_time),
+                "end_time": convert_to_est(end_time),
+                "assistant_id": assistantId
+            }
 
-        # If latest message is not from assistant, sleep to give Assistants API time to add GPT-4 response to thread
-        if messages.data[0].role != 'assistant':
-            time.sleep(2)
+            # Get all messages from the thread
             messages = client.beta.threads.messages.list(
                 thread_id=thread.id,
-                # Make sure thread is ordered with latest messages first
+                # make sure thread is ordered with latest messages first
                 order='desc'
-            )    
+            )
+
+            # If latest message is not from assistant, sleep to give Assistants API time to add GPT-4 response to thread
+            if messages.data[0].role != 'assistant':
+                time.sleep(2)
+                messages = client.beta.threads.messages.list(
+                    thread_id=thread.id,
+                    # Make sure thread is ordered with latest messages first
+                    order='desc'
+                )    
             
-        message = None
-        if messages.data[0].role != 'assistant':
-            errorResponse = """OpenAI's Assistants API failed to return a response, please change your query and try again.<br>
-            Tips to improve your queries:<br>
-            &nbsp;&nbsp;- Provide a specific year or years<br>
-            &nbsp;&nbsp;- Provide a specific area of the town budget<br>
-            &nbsp;&nbsp;- Avoid abbreviations"""
-            metadata["threadmsgs"] = messages
-            # If assistant still doesn't return response, make an error response
-            message = client.beta.threads.messages.create(
-                thread_id=thread.id,
-                role="user",
-                content=errorResponse
-            )
-        else:
-            # Retrieve the message object from the assistant
-            message = client.beta.threads.messages.retrieve(
-                thread_id=thread.id,
-                # Use the latest message from the assistant
-                message_id=messages.data[0].id
-            )
+            message = None
+            if messages.data[0].role != 'assistant':
+                errorResponse = """OpenAI's Assistants API failed to return a response, please change your query and try again.<br>
+                Tips to improve your queries:<br>
+                &nbsp;&nbsp;- Provide a specific year or years<br>
+                &nbsp;&nbsp;- Provide a specific area of the town budget<br>
+                &nbsp;&nbsp;- Avoid abbreviations"""
+                metadata["threadmsgs"] = messages
+                # If assistant still doesn't return response, make an error response
+                message = client.beta.threads.messages.create(
+                    thread_id=thread.id,
+                    role="user",
+                    content=errorResponse
+                )
+            else:
+                # Retrieve the message object from the assistant
+                message = client.beta.threads.messages.retrieve(
+                    thread_id=thread.id,
+                    # Use the latest message from the assistant
+                    message_id=messages.data[0].id
+                )
 
         if debug == "true":
             # Use Streamlit Magic commands to output message, which is a feature that allows dev to write
             # markdown, data, charts, etc without having to write an explicit command
             message
+
+            # Used for serialize response to a pickle file for use as a dummy
+            # message_content = message.content[0].text
+            # message_content.value = "<b>This is a dummy assistant response used for testing.</b><br>" + message_content.value
+            # serialize(message, 'dummyResponse.pickle')
 
         # Extract the message content
         message_content = message.content[0].text
@@ -224,45 +249,46 @@ if prompt := st.chat_input(chatInputPlaceholder):
         st.markdown(message_content.value, unsafe_allow_html=True)
 
         # Save the assistant's message in session state (we do this in addition to 
-        # saving the thread because we processed the message after retrieving it, e.g. for citations)
+        # saving the thread because we processed the message after retrieving it)
         st.session_state.messages.append({"role": "assistant", "content": message_content.value})
 
-        # log user query + assistant response + metadata
-        st.session_state.logged_prompt = collector.log_prompt(
-            config_model={"model": "gpt-4-turbo-preview"},
-            prompt=prompt,
-            generation=message_content.value,
-            metadata=metadata
-        )
-
-        # not functional because user feedback comes back empty
-        # # display feedback ui
-        # user_feedback = collector.st_feedback(
-        #     component="default",
-        #     feedback_type="thumbs",
-        #     model=st.session_state.logged_prompt.config_model.model,
-        #     prompt_id=st.session_state.logged_prompt.id,
-        #     open_feedback_label='[Optional] Provide additional feedback'
-        # )
-
-        # if user_feedback:
-
-        #     # log user feedback
-        #     trubrics.log_feedback(
-        #         component="default",
-        #         model=st.session_state.logged_prompt.config_model.model,
-        #         user_response=user_feedback,
-        #         prompt_id=st.session_state.logged_prompt.id
-        #     )
-
-        with st.form('form'):
-            streamlit_feedback(
-                feedback_type = "thumbs",
-                align = "flex-start",
-                key='feedback_key'
+        # log user query + assistant response + metadata 
+        if UITest != "true":
+            st.session_state.logged_prompt = collector.log_prompt(
+                config_model={"model": "gpt-4-turbo-preview"},
+                prompt=prompt,
+                generation=message_content.value,
+                metadata=metadata
             )
-            st.text_input(
-                label="Please elaborate on your response.",
-                key="feedback_response"
-            )
-            st.form_submit_button('Submit', on_click=_submit_feedback)
+
+            # not functional because user feedback comes back empty
+            # # display feedback ui
+            # user_feedback = collector.st_feedback(
+            #     component="default",
+            #     feedback_type="thumbs",
+            #     model=st.session_state.logged_prompt.config_model.model,
+            #     prompt_id=st.session_state.logged_prompt.id,
+            #     open_feedback_label='[Optional] Provide additional feedback'
+            # )
+
+            # if user_feedback:
+
+            #     # log user feedback
+            #     trubrics.log_feedback(
+            #         component="default",
+            #         model=st.session_state.logged_prompt.config_model.model,
+            #         user_response=user_feedback,
+            #         prompt_id=st.session_state.logged_prompt.id
+            #     )
+
+            with st.form('form'):
+                streamlit_feedback(
+                    feedback_type = "thumbs",
+                    align = "flex-start",
+                    key='feedback_key'
+                )
+                st.text_input(
+                    label="Please elaborate on your response.",
+                    key="feedback_response"
+                )
+                st.form_submit_button('Submit', on_click=_submit_feedback)
