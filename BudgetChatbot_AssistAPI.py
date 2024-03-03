@@ -57,8 +57,8 @@ def get_user_agent():
     except: return None
 
 
-# user_ip = client_ip()
-# user_agent = get_user_agent()
+user_ip = client_ip()
+user_agent = get_user_agent()
 
 # handle feedback submissions
 def _submit_feedback():
@@ -195,8 +195,8 @@ if prompt := st.chat_input(chatInputPlaceholder):
                 "start_time": convert_to_est(start_time),
                 "end_time": convert_to_est(end_time),
                 "assistant_id": assistantId
-                # "user_ip": user_ip,
-                # "user_agent": user_agent
+                "user_ip": user_ip,
+                "user_agent": user_agent
             }
 
             # Get all messages from the thread
