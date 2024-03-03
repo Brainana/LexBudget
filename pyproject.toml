@@ -11,6 +11,7 @@ python = ">= 3.9.8, < 4.0"
 openai = ">= 1.6.1, < 2"
 streamlit = ">= 1.29.0, < 2"
 trubrics = {extras = ["streamlit"], version = "^1.6.2"}
+streamlit-javascript = "^0.1.5"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.2.0"
