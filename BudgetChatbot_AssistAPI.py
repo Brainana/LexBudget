@@ -35,14 +35,6 @@ collector = FeedbackCollector(
     password=st.secrets.TRUBRICS_PASSWORD,
 )
 
-return_value = st_javascript("""
-    await fetch("https://reqres.in/api/products/3").then(function(response) {
-        return response.json();
-    })
-""")
-st.markdown(f"Return value was: {return_value}")
-
-
 def client_ip():
     url = 'https://api.ipify.org?format=json'
     script = (f'await fetch("{url}").then('
@@ -65,8 +57,8 @@ def get_user_agent():
     except: return None
 
 
-user_ip = client_ip()
-user_agent = get_user_agent()
+# user_ip = client_ip()
+# user_agent = get_user_agent()
 
 # handle feedback submissions
 def _submit_feedback():
@@ -112,13 +104,20 @@ if "messages" not in st.session_state:
 
 # Display all previous messages upon page refresh
 assistantAvatar = config.get('Template', 'assistantAvatar')
-for message in st.session_state.messages:
-    if message["role"] == "assistant":
-        with st.chat_message(message["role"], avatar=assistantAvatar):
-            st.markdown(message["content"], unsafe_allow_html=True)
-    else:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"], unsafe_allow_html=True)
+numMsgs = len(st.session_state.messages)
+for index,message in enumerate(st.session_state.messages):
+    if message["type"] == "message":
+        if message["role"] == "assistant":
+            with st.chat_message(message["role"], avatar=assistantAvatar):
+                st.markdown(message["content"], unsafe_allow_html=True)
+                if index < numMsgs - 1:
+                    # Add references in st.expander if applicable
+                    if st.session_state.messages[index+1]["type"] == "reference":
+                        with st.expander("References"):
+                            st.markdown(st.session_state.messages[index+1]["content"], unsafe_allow_html=True)
+        else:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"], unsafe_allow_html=True)
 
 # We use a predefined assistant with uploaded files
 # Should not create a new assistant every time the page refreshes
@@ -131,7 +130,7 @@ UITest = config.get('Server', 'UITest')
 chatInputPlaceholder = config.get('Template', 'chatInputPlaceholder')
 if prompt := st.chat_input(chatInputPlaceholder):
     # User has entered a question -> save it to the session state 
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    st.session_state.messages.append({"role": "user", "type": "message", "content": prompt})
 
     # Copy the user's question in the chat window
     with st.chat_message("user"):
@@ -195,10 +194,9 @@ if prompt := st.chat_input(chatInputPlaceholder):
                 "query_time": f"{query_time:.2f} sec",
                 "start_time": convert_to_est(start_time),
                 "end_time": convert_to_est(end_time),
-                "assistant_id": assistantId,
-                "user_ip": user_ip,
-                "user_agent": user_agent
-
+                "assistant_id": assistantId
+                # "user_ip": user_ip,
+                # "user_agent": user_agent
             }
 
             # Get all messages from the thread
@@ -282,14 +280,16 @@ if prompt := st.chat_input(chatInputPlaceholder):
         # Display assistant message
         st.markdown(message_content.value, unsafe_allow_html=True)
 
+        # Save the assistant's message in session state (we do this in addition to 
+        # saving the thread because we processed the message after retrieving it)
+        st.session_state.messages.append({"role": "assistant",  "type": "message", "content": message_content.value})
+
         # Add footnotes to the end of the message before displaying to user
         if len(citations) > 0:
             with st.expander("References"):
-                st.markdown('\n'.join(citations).replace('$', '&dollar;'), unsafe_allow_html=True)
-
-        # Save the assistant's message in session state (we do this in addition to 
-        # saving the thread because we processed the message after retrieving it)
-        st.session_state.messages.append({"role": "assistant", "content": message_content.value})
+                references = '\n'.join(citations).replace('$', '&dollar;')
+                st.markdown(references, unsafe_allow_html=True)
+                st.session_state.messages.append({"role": "assistant",  "type": "reference", "content": references})
 
         # log user query + assistant response + metadata 
         if UITest != "true":

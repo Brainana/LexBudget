@@ -1611,6 +1611,20 @@ files = [
 streamlit = ">=0.63"
 
 [[package]]
+name = "streamlit-javascript"
+version = "0.1.5"
+description = "component to run javascript code in streamlit application"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "streamlit-javascript-0.1.5.tar.gz", hash = "sha256:9da5176522a0acf2c39d3b0bec9f856fdd8ea3c70bb1066841a546ab1348ae1d"},
+    {file = "streamlit_javascript-0.1.5-py3-none-any.whl", hash = "sha256:36ca4d8c46fd5b6526d1a705530472e03cb6e5bb24694330649f21d5c436d280"},
+]
+
+[package.dependencies]
+streamlit = ">=0.75"
+
+[[package]]
 name = "tenacity"
 version = "8.2.3"
 description = "Retry code until it succeeds"
@@ -1888,4 +1902,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.9.8, < 4.0"
-content-hash = "82362bd3d2604a6e06deacdbee1bb4b6fad1f380b9c697222e995457b2e9bd15"
+content-hash = "09d29be7927fba0b5c50e54da636789015b38da3aaa547e5a73bdf3cd953413e"
