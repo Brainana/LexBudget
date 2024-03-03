@@ -237,16 +237,16 @@ if prompt := st.chat_input(chatInputPlaceholder):
                 # Do not provide footnote if file for citation cannot be found
                 message_content.value = message_content.value.replace(annotation.text, '')
  
-        # Add footnotes to the end of the message before displaying to user
-        if len(citations) > 0:
-            message_content.value += '<h5 style="border-bottom: 1px solid">References</h5>'
-            message_content.value += '\n\n' + '\n'.join(citations)
-
         # Prevent latex formatting by replacing $ with html dollar literal
         message_content.value = message_content.value.replace('$','&dollar;')
 
         # Display assistant message
         st.markdown(message_content.value, unsafe_allow_html=True)
+
+        # Add footnotes to the end of the message before displaying to user
+        if len(citations) > 0:
+            with st.expander("References"):
+                st.markdown('\n'.join(citations).replace('$', '&dollar;'), unsafe_allow_html=True)
 
         # Save the assistant's message in session state (we do this in addition to 
         # saving the thread because we processed the message after retrieving it)
