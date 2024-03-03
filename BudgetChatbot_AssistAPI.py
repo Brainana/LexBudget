@@ -7,6 +7,9 @@ import pytz
 # import libraries for user feedback
 from trubrics.integrations.streamlit import FeedbackCollector
 from streamlit_feedback import streamlit_feedback
+from streamlit_javascript import st_javascript
+
+
 # import regex library
 import re
 # import serialization/deserialization library
@@ -31,6 +34,39 @@ collector = FeedbackCollector(
     email=st.secrets.TRUBRICS_EMAIL,
     password=st.secrets.TRUBRICS_PASSWORD,
 )
+
+return_value = st_javascript("""
+    await fetch("https://reqres.in/api/products/3").then(function(response) {
+        return response.json();
+    })
+""")
+st.markdown(f"Return value was: {return_value}")
+
+
+def client_ip():
+    url = 'https://api.ipify.org?format=json'
+    script = (f'await fetch("{url}").then('
+                'function(response) {'
+                    'return response.json();'
+                '})')
+    try:
+        result = st_javascript(script)
+        if isinstance(result, dict) and 'ip' in result:
+            return result['ip']
+        else: return None
+    except: return None
+
+
+def get_user_agent():
+    try:
+        user_agent = st_javascript('navigator.userAgent')
+        if user_agent: return user_agent
+        else: return None
+    except: return None
+
+
+user_ip = client_ip()
+user_agent = get_user_agent()
 
 # handle feedback submissions
 def _submit_feedback():
@@ -159,7 +195,10 @@ if prompt := st.chat_input(chatInputPlaceholder):
                 "query_time": f"{query_time:.2f} sec",
                 "start_time": convert_to_est(start_time),
                 "end_time": convert_to_est(end_time),
-                "assistant_id": assistantId
+                "assistant_id": assistantId,
+                "user_ip": user_ip,
+                "user_agent": user_agent
+
             }
 
             # Get all messages from the thread
