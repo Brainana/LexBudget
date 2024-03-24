@@ -1,4 +1,4 @@
-# LexBudget
+# LexBudget - modified by justin
 **Setup Local Dev Environment**
   - Install Python and PIP on the local system
   - We’ll be using [poetry](https://python-poetry.org/) for dependency management: install poetry with the command “pip install poetry”. Further basic usage information is [here](https://python-poetry.org/docs/basic-usage/).
