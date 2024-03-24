@@ -1,1 +1,1 @@
-web: sh setup.sh && streamlit run BudgetChatbot_AssistAPI.py
+web: sh setup.sh && streamlit run Chatbot.py
