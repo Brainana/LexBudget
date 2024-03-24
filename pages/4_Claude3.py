@@ -33,9 +33,6 @@ debug = config.get('Server', 'debug')
 # Set page title
 st.title(config.get('Template', 'title'))
 
-# Initialize OpenAI client with your own API key
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
 # Initialize feedback collector
 collector = FeedbackCollector(
     project="default",
@@ -65,8 +62,8 @@ def get_user_agent():
     except: return None
 
 
-# user_ip = client_ip()
-# user_agent = get_user_agent()
+user_ip = client_ip()
+user_agent = get_user_agent()
 
 # handle feedback submissions
 def _submit_feedback():
