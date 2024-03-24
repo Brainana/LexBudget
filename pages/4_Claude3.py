@@ -97,15 +97,6 @@ def deserialize(path):
     with open(path, 'rb') as file:
        return  pickle.load(file)
 
-# Cache the thread on session state, so we don't keep creating
-# new thread for the same browser session
-thread = None
-if "openai_thread" not in st.session_state:
-    thread = client.beta.threads.create()
-    st.session_state["openai_thread"] = thread
-else:
-    thread = st.session_state["openai_thread"]
-
 # Get all previous messages in session state
 if "claudeMessages" not in st.session_state:
     st.session_state.claudeMessages = []
