@@ -32,6 +32,7 @@ debug = config.get('Server', 'debug')
 
 # Set page title
 st.title(config.get('Template', 'title'))
+st.markdown('Using LangChain framework + ChromaDB + Claude 3')
 
 # Initialize feedback collector
 collector = FeedbackCollector(

@@ -1,24 +1,32 @@
 """
 Usage:
-python scripts/create_chromadb.py --inputDirectory /path/to/directory/
+python scripts/create_chromadb.py --inputDirectory /path/to/directory/ --inputMetadataFile /path/to/file/ --outputDirectory /path/to/directory/
 """
 
 import os
-import numpy as np
 import argparse
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 import streamlit as st
+import json
 
 # get input directory
 parser = argparse.ArgumentParser()
 parser.add_argument("--inputDirectory", type=str, required=True)
+parser.add_argument("--inputMetadataFile", type=str, required=True)
+parser.add_argument("--outputDirectory", type=str, required=True)
 args = parser.parse_args()
+
+# load metadata
+metadata = None
+with open(args.inputMetadataFile, 'r') as file:
+    metadata = json.load(file)
 
 # get list of files in directory
 file_list = os.listdir(args.inputDirectory)
 all_docs = []
+
 for file_name in file_list:
     # for each pdf, chunk document and append to list of docs
     if file_name.endswith(".pdf"):
@@ -26,16 +34,17 @@ for file_name in file_list:
         print("processing " + file_name)
         loader = PyPDFLoader(file_path)
         chunks = loader.load_and_split()
-        all_docs.append(chunks)
-all_docs = np.concatenate(all_docs)
+        for chunk in chunks:
+            chunk.metadata['updated_time'] = metadata[file_name]['updated_time']
+            all_docs.append(chunk)
 
 # initialize OpenAI vector embeddings 
-embeddings = OpenAIEmbeddings()
+embeddings = OpenAIEmbeddings(openai_api_key=st.secrets['OPENAI_API_KEY'])
 
 # create database w/ chunks + embeddings
 chroma_db = Chroma.from_documents(
     documents=all_docs, 
     embedding=embeddings, 
-    persist_directory="chromadb_data", 
+    persist_directory=args.outputDirectory, 
     collection_name="lc_chroma_lexbudget"
 )

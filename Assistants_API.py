@@ -27,6 +27,7 @@ debug = config.get('Server', 'debug')
 
 # Set page title
 st.title(config.get('Template', 'title'))
+st.markdown('Using OpenAI Assistants API')
 
 # Initialize OpenAI client with your own API key
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
