@@ -156,7 +156,7 @@ for index,message in enumerate(st.session_state.metadataMessages):
                 if index < numMsgs - 1:
                     # Add references in st.expander if applicable
                     if st.session_state.metadataMessages[index+1]["type"] == "reference":
-                        with st.expander("References"):
+                        with st.expander("Retrieved Chunks (for debugging)"):
                             st.markdown(st.session_state.metadataMessages[index+1]["content"], unsafe_allow_html=True)
         else:
             with st.chat_message(message["role"]):
@@ -252,13 +252,13 @@ if prompt := st.chat_input(chatInputPlaceholder):
             link = "<a href='https://brainana.github.io/LexBudgetDocs/" + source + "#page=" + page + "'>" + source + " (page(s) " + page + " to " + end_page + ")</a> <br>"
             context += "source link: " + link + " content: " + doc[0].page_content
             references += link
-
-        with st.expander("References"):
-            st.markdown(references, unsafe_allow_html=True)
-        with st.expander("Rephrased Prompt (for debugging purposes)"):
+        
+        with st.expander("Rephrased Prompt (for debugging)"):
             st.markdown(rephrasedPrompt, unsafe_allow_html=True)
-        with st.expander("Most Relevant Vectors (for debugging)"):
+        with st.expander("Most Relevant Chunks w/ Similarity Score (for debugging)"):
             st.write(docs)
+        with st.expander("Links to Relevant Chunks (for debugging)"):
+            st.markdown(references, unsafe_allow_html=True)
 
         query = f"""Given this chat history: {chatHistory}
         And the following context: {context}
