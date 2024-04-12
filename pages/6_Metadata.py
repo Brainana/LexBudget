@@ -263,18 +263,9 @@ if prompt := st.chat_input(chatInputPlaceholder):
         query = f"""Given this chat history: {chatHistory}
         And the following context: {context}
         Answer this user query: {rephrasedPrompt}
-        Prioritize finding information on the actual historical spending amounts if applicable, and if these cannot be found search for information on the projected spending amounts.
+        Prioritize finding information on the actual historical spending amounts if applicable, and if these cannot be found search for information on the estimated or projected spending amounts.
         Please also include the links of the references used to generate your answer.
         """
-        # query = f"""Given the previous converstation: {chatHistory} 
-        # When dealing with financial data, prioritize locating the 'Actual' spending. If it's not available, 
-        # search for the 'Projections' amount. If neither 'Actual' nor 'Projection' is found, then resort to 
-        # the 'Esitmate' amount.       
-        # Answer the question based only on the following references: {context}
-
-        # Question: {rephrasedPrompt}
-        # """
-        # Please also include the link of the references next to the text that are generated based on the reference.
 
         full_response = ""
 
