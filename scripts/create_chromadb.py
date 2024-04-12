@@ -34,7 +34,12 @@ for file_name in file_list:
         print("processing " + file_name)
         loader = PyPDFLoader(file_path)
         chunks = loader.load_and_split()
-        for chunk in chunks:
+        for index, chunk in enumerate(chunks):
+            if index == len(chunks) - 1:
+                chunk.metadata["end_page"] = 0
+            else:
+                chunk.metadata["end_page"] = chunks[index+1].metadata["page"]
+
             chunk.metadata['updated_time'] = metadata[file_name]['updated_time']
             all_docs.append(chunk)
 
@@ -44,6 +49,7 @@ embeddings = OpenAIEmbeddings(openai_api_key=st.secrets['OPENAI_API_KEY'])
 # create database w/ chunks + embeddings
 chroma_db = Chroma.from_documents(
     documents=all_docs, 
+    collection_metadata={"hnsw:space": "cosine"},
     embedding=embeddings, 
     persist_directory=args.outputDirectory, 
     collection_name="lc_chroma_lexbudget"

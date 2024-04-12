@@ -8,6 +8,7 @@ import pytz
 from trubrics.integrations.streamlit import FeedbackCollector
 from streamlit_feedback import streamlit_feedback
 from streamlit_javascript import st_javascript
+# import libraries for RAG + streaming
 from langchain_openai import ChatOpenAI
 from langchain_community.vectorstores import Chroma
 from langchain_openai import OpenAIEmbeddings
@@ -15,6 +16,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough
 from langchain_core.pydantic_v1 import BaseModel
 from langchain_core.output_parsers import StrOutputParser
+# import libraries for metadata
+import json
 
 
 # import regex library
@@ -43,6 +46,29 @@ collector = FeedbackCollector(
     password=st.secrets.TRUBRICS_PASSWORD,
 )
 
+# load metadata
+metadata = None
+with open("./scripts/vector_metadata.json", 'r') as file:
+    metadata = json.load(file)
+
+# info from one year can be found in docs from later years -> update years list: e.g. an FY2022 answer may be found in the FY2022-FY2025 document
+def modifyYears(years):
+    newYearNums = set()
+    for year in years:
+        currYear = (int)(year[2:])
+        for i in range(0,4):
+            newYearNums.add(currYear+i)
+
+    modifiedYears = set()  
+    for yearNum in newYearNums:
+        year = "FY" + str(yearNum) + ".pdf"
+        if year in metadata:
+            modifiedYears.add(year[:-4])
+    
+    return modifiedYears
+
+
+# get client ip
 def client_ip():
     url = 'https://api.ipify.org?format=json'
     script = (f'await fetch("{url}").then('
@@ -56,7 +82,7 @@ def client_ip():
         else: return None
     except: return None
 
-
+# get user agent info 
 def get_user_agent():
     try:
         user_agent = st_javascript('navigator.userAgent')
@@ -110,6 +136,14 @@ else:
 if "metadataMessages" not in st.session_state:
     st.session_state.metadataMessages = []
 
+# construct chat history string
+chatHistory = ""
+
+# get last query from session state
+lastQuery = ""
+if "lastQuery" in st.session_state:
+    lastQuery = st.session_state.lastQuery
+
 # Display all previous messages upon page refresh
 assistantAvatar = config.get('Template', 'assistantAvatar')
 numMsgs = len(st.session_state.metadataMessages)
@@ -118,6 +152,7 @@ for index,message in enumerate(st.session_state.metadataMessages):
         if message["role"] == "assistant":
             with st.chat_message(message["role"], avatar=assistantAvatar):
                 st.markdown(message["content"], unsafe_allow_html=True)
+                chatHistory += "LLM responded: " + message["content"] + "\n"
                 if index < numMsgs - 1:
                     # Add references in st.expander if applicable
                     if st.session_state.metadataMessages[index+1]["type"] == "reference":
@@ -126,13 +161,14 @@ for index,message in enumerate(st.session_state.metadataMessages):
         else:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"], unsafe_allow_html=True)
+                chatHistory += "The user asked: " + message["content"] + "\n"
 
 # Get UITest config
 UITest = config.get('Server', 'UITest')
 
 embeddings = OpenAIEmbeddings()
 
-chroma_db = Chroma(persist_directory="chromadb_metadata", embedding_function=embeddings, collection_name="lc_chroma_lexbudget")
+chroma_db = Chroma(persist_directory="chromadb_metadata_pageinfo", embedding_function=embeddings, collection_name="lc_chroma_lexbudget")
 
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     
@@ -149,38 +185,96 @@ if prompt := st.chat_input(chatInputPlaceholder):
     with st.chat_message("assistant", avatar=assistantAvatar):
 
         message_placeholder = st.empty()
-        message_placeholder.markdown("Running retrieval...")
 
         # Track query start time
         start_time = time.time()
 
-        # get relevant documents from vector db w/ similarity search: get bigger k so it finds all relevant documents from all years
-        docs = chroma_db.similarity_search_with_relevance_scores(prompt, k=100)
+        # figure out relevant years for query
+        query = f"""Based on this prompt: {prompt} 
+        And this chat history: {chatHistory} 
+        What fiscal year or years is the user asking about? Give your answer in the format 'FY____, FY____, ...' with nothing else. 
+        If the user didn't specify a year or says 'current', assume they are talking about FY2025."""
+
+        years = client.chat.completions.create(
+            messages=[{"role": "user", "content": query}],
+            model="gpt-4-turbo-preview",
+        )
+        strYears = years.choices[0].message.content
+        years = strYears.split(", ")
+        # info from one year can be found in docs from later years -> update years list: e.g. an FY2022 answer may be found in the FY2022-FY2025 document
+        years = list(modifyYears(years))
+
+        # creating metadata filter that only searches documents in the relevant years
+        filter = None
+        if len(years) == 1:
+            filename = years[0] + ".pdf"
+            filter = {'updated_time': metadata[filename]['updated_time']}
+        else:
+            filter={
+                '$or': []
+            }
+            for year in years:
+                filename = year + ".pdf"
+                yearFilter = {
+                    'updated_time': {
+                        '$eq': metadata[filename]['updated_time']
+                    }
+                }
+                filter['$or'].append(yearFilter)
+
+        # rephrase user query to explicitly restate prompt -> similarity search is more accurate
+        query = f"""Rephrase the following query to explicitly state the question: {prompt}
+        Given this previous user query: {lastQuery}
+        And that the query is asking about the following year(s): {strYears}
+        """
+
+        rephrasedPrompt = client.chat.completions.create(
+            messages=[{"role": "user", "content": query}],
+            model="gpt-4-turbo-preview",
+        )
+        rephrasedPrompt = rephrasedPrompt.choices[0].message.content
+        st.session_state.lastQuery = rephrasedPrompt
+
+        message_placeholder.markdown("Searching for: <b>" + rephrasedPrompt + "</b>", unsafe_allow_html=True)
+
+        # get relevant documents from vector db w/ similarity search
+        docs = chroma_db.similarity_search_with_relevance_scores(rephrasedPrompt, k=4*len(years), filter=filter)
 
         # sort docs by updated time + relevance score
-        sorted_docs = sorted(docs, key=lambda doc: (-doc[0].metadata['updated_time'], -doc[1]))
+        top_docs = sorted(docs, key=lambda doc: (-doc[0].metadata['updated_time'], -doc[1]))
 
-        # top 4 of sorted docs
-        top_docs = sorted_docs[:4]
-         
         context = ""
         references = ""
         for doc in top_docs:
-            context += " " + doc[0].page_content
             source = doc[0].metadata['source']
             page = str(doc[0].metadata['page'])
-            references += "<a href='https://brainana.github.io/LexBudgetDocs/" + source + "#page=" + page + "'>" + source + " (page " + page + ")</a> <br>"
+            end_page = str(doc[0].metadata['end_page'])
+            link = "<a href='https://brainana.github.io/LexBudgetDocs/" + source + "#page=" + page + "'>" + source + " (page(s) " + page + " to " + end_page + ")</a> <br>"
+            context += "source link: " + link + " content: " + doc[0].page_content
+            references += link
 
         with st.expander("References"):
             st.markdown(references, unsafe_allow_html=True)
+        with st.expander("Rephrased Prompt (for debugging purposes)"):
+            st.markdown(rephrasedPrompt, unsafe_allow_html=True)
         with st.expander("Most Relevant Vectors (for debugging)"):
-            st.write(top_docs)
+            st.write(docs)
 
-        query = f"""If the user does not specify a year or says 'current', assume the question is asking about FY2025. Answer the question based only on the following context:
-        {context}
-
-        Question: {prompt}
+        query = f"""Given this chat history: {chatHistory}
+        And the following context: {context}
+        Answer this user query: {rephrasedPrompt}
+        Prioritize finding information on the actual historical spending amounts if applicable, and if these cannot be found search for information on the projected spending amounts.
+        Please also include the links of the references used to generate your answer.
         """
+        # query = f"""Given the previous converstation: {chatHistory} 
+        # When dealing with financial data, prioritize locating the 'Actual' spending. If it's not available, 
+        # search for the 'Projections' amount. If neither 'Actual' nor 'Projection' is found, then resort to 
+        # the 'Esitmate' amount.       
+        # Answer the question based only on the following references: {context}
+
+        # Question: {rephrasedPrompt}
+        # """
+        # Please also include the link of the references next to the text that are generated based on the reference.
 
         full_response = ""
 
