@@ -51,6 +51,14 @@ metadata = None
 with open("./scripts/vector_metadata.json", 'r') as file:
     metadata = json.load(file)
 
+def getUpdatedTime(item):
+    return item[1]["updated_time"]
+
+# sort docs by recency, then pull latest book to get latest fiscal year
+metadata = dict(sorted(metadata.items(), key=getUpdatedTime, reverse=True))
+latestBrownBook = next(iter(metadata))
+currentFY = latestBrownBook[:6]
+
 # info from one year can be found in docs from later years -> update years list: e.g. an FY2022 answer may be found in the FY2022-FY2025 document
 def modifyYears(years):
     newYearNums = set()
@@ -193,7 +201,7 @@ if prompt := st.chat_input(chatInputPlaceholder):
         query = f"""Based on this prompt: {prompt} 
         And this chat history: {chatHistory} 
         What fiscal year or years is the user asking about? Give your answer in the format 'FY____, FY____, ...' with nothing else. 
-        If the user didn't specify a year or says 'current', assume they are talking about FY2025."""
+        If the user didn't specify a year or says 'current', assume they are talking about {currentFY}."""
 
         years = client.chat.completions.create(
             messages=[{"role": "user", "content": query}],
@@ -238,6 +246,7 @@ if prompt := st.chat_input(chatInputPlaceholder):
         message_placeholder.markdown("Searching for: <b>" + rephrasedPrompt + "</b>", unsafe_allow_html=True)
 
         # get relevant documents from vector db w/ similarity search
+        # we fetch 4*<num of queried years> docs since if multiple years are asked more docs need to be fetched
         docs = chroma_db.similarity_search_with_relevance_scores(rephrasedPrompt, k=4*len(years), filter=filter)
 
         # sort docs by updated time + relevance score
@@ -246,11 +255,11 @@ if prompt := st.chat_input(chatInputPlaceholder):
         context = ""
         references = ""
         for doc in top_docs:
-            source = doc[0].metadata['source']
+            source = doc[0].metadata['source'].replace("\\","/")
             page = str(doc[0].metadata['page'])
             end_page = str(doc[0].metadata['end_page'])
             link = "<a href='https://brainana.github.io/LexBudgetDocs/" + source + "#page=" + page + "'>" + source + " (page(s) " + page + " to " + end_page + ")</a> <br>"
-            context += "source link: " + link + " content: " + doc[0].page_content
+            context += "Please exactly reference the following link in the generated response: " + link + " if the following content is used to generate the response: " + doc[0].page_content + "\n"
             references += link
         
         with st.expander("Rephrased Prompt (for debugging)"):
@@ -264,7 +273,6 @@ if prompt := st.chat_input(chatInputPlaceholder):
         And the following context: {context}
         Answer this user query: {rephrasedPrompt}
         Prioritize finding information on the actual historical spending amounts if applicable, and if these cannot be found search for information on the estimated or projected spending amounts.
-        Please also include the links of the references used to generate your answer.
         """
 
         full_response = ""
@@ -275,13 +283,12 @@ if prompt := st.chat_input(chatInputPlaceholder):
             messages=[{"role": "user", "content": query}],
             model="gpt-4-turbo-preview",
         ): 
-            message_placeholder.empty()
             full_response += (response.choices[0].delta.content or "")
             # Prevent latex formatting by replacing $ with html dollar literal
             full_response = full_response.replace('$','&dollar;')
-            message_placeholder.markdown(full_response + "▌")
+            message_placeholder.markdown(full_response + "▌", unsafe_allow_html=True)
        
-        message_placeholder.markdown(full_response)
+        message_placeholder.markdown(full_response, unsafe_allow_html=True)
 
         # Track query end time
         end_time = time.time()
