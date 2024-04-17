@@ -173,7 +173,7 @@ for index,message in enumerate(st.session_state.metadataMessages):
 
 embeddings = OpenAIEmbeddings()
 
-chroma_db = Chroma(persist_directory="chromadb_metadata_pageinfo", embedding_function=embeddings, collection_name="lc_chroma_lexbudget")
+chroma_db = Chroma(persist_directory="chromadb", embedding_function=embeddings, collection_name="lc_chroma_lexbudget")
     
 # Display the input text box
 chatInputPlaceholder = config.get('Template', 'chatInputPlaceholder')
