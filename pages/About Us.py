@@ -20,8 +20,7 @@ col1.write(
     "The implementation of a chatbot will further facilitate easy interaction, allowing residents to ask specific questions and receive prompt replies."
 )
 col1.write("")
-col1.write("")
-col1.write("")
+
 col1_sub, col2_sub = col1.columns(2)
 
 
@@ -42,9 +41,11 @@ with col2_sub:
     col2_sub.write("Andrei Radulescu-Banu")
     col2_sub.write("Chester Curme")
     col2_sub.write("Jeannie Lu")
+    col2_sub.write("Wei Ding")
     col2_sub.write("John Truelove")
     col2_sub.write("Nagarjuna Venna")
     col2_sub.write("Neerja Bajaj")
+    
 
 
 img = Image.open("images/teamlogo.png")
