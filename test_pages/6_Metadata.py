@@ -34,7 +34,7 @@ debug = config.get('Server', 'debug')
 
 # Set page title
 st.title(config.get('Template', 'title'))
-st.markdown('Using LangChain framework + ChromaDB w/ metadata + OpenAI Chat Completions API')
+# st.markdown('Using LangChain framework + ChromaDB w/ metadata + OpenAI Chat Completions API')
 
 # Initialize OpenAI client with your own API key
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -99,8 +99,8 @@ def get_user_agent():
     except: return None
 
 
-# user_ip = client_ip()
-# user_agent = get_user_agent()
+user_ip = client_ip()
+user_agent = get_user_agent()
 
 # handle feedback submissions
 def _submit_feedback():
@@ -161,24 +161,19 @@ for index,message in enumerate(st.session_state.metadataMessages):
             with st.chat_message(message["role"], avatar=assistantAvatar):
                 st.markdown(message["content"], unsafe_allow_html=True)
                 chatHistory += "LLM responded: " + message["content"] + "\n"
-                if index < numMsgs - 1:
-                    # Add references in st.expander if applicable
-                    if st.session_state.metadataMessages[index+1]["type"] == "reference":
-                        with st.expander("Retrieved Chunks (for debugging)"):
-                            st.markdown(st.session_state.metadataMessages[index+1]["content"], unsafe_allow_html=True)
+                # if index < numMsgs - 1:
+                #     # Add references in st.expander if applicable
+                #     if st.session_state.metadataMessages[index+1]["type"] == "reference":
+                #         with st.expander("Retrieved Chunks (for debugging)"):
+                #             st.markdown(st.session_state.metadataMessages[index+1]["content"], unsafe_allow_html=True)
         else:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"], unsafe_allow_html=True)
                 chatHistory += "The user asked: " + message["content"] + "\n"
 
-# Get UITest config
-UITest = config.get('Server', 'UITest')
-
 embeddings = OpenAIEmbeddings()
 
 chroma_db = Chroma(persist_directory="chromadb_metadata_pageinfo", embedding_function=embeddings, collection_name="lc_chroma_lexbudget")
-
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     
 # Display the input text box
 chatInputPlaceholder = config.get('Template', 'chatInputPlaceholder')
@@ -262,12 +257,12 @@ if prompt := st.chat_input(chatInputPlaceholder):
             context += "Please exactly reference the following link in the generated response: " + link + " if the following content is used to generate the response: " + doc[0].page_content + "\n"
             references += link
         
-        with st.expander("Rephrased Prompt (for debugging)"):
-            st.markdown(rephrasedPrompt, unsafe_allow_html=True)
-        with st.expander("Most Relevant Chunks w/ Similarity Score (for debugging)"):
-            st.write(docs)
-        with st.expander("Links to Relevant Chunks (for debugging)"):
-            st.markdown(references, unsafe_allow_html=True)
+        # with st.expander("Rephrased Prompt (for debugging)"):
+        #     st.markdown(rephrasedPrompt, unsafe_allow_html=True)
+        # with st.expander("Most Relevant Chunks w/ Similarity Score (for debugging)"):
+        #     st.write(docs)
+        # with st.expander("Links to Relevant Chunks (for debugging)"):
+        #     st.markdown(references, unsafe_allow_html=True)
 
         query = f"""Given this chat history: {chatHistory}
         And the following context: {context}
@@ -310,42 +305,21 @@ if prompt := st.chat_input(chatInputPlaceholder):
         st.session_state.metadataMessages.append({"role": "assistant",  "type": "reference", "content": references})
 
         # log user query + assistant response + metadata 
-        if UITest != "true":
-            st.session_state.logged_prompt = collector.log_prompt(
-                config_model={"model": "gpt-4-turbo-preview"},
-                prompt=prompt,
-                generation=full_response,
-                metadata=metadata
+        st.session_state.logged_prompt = collector.log_prompt(
+            config_model={"model": "gpt-4-turbo-preview"},
+            prompt=prompt,
+            generation=full_response,
+            metadata=metadata
+        )
+
+        with st.form('form'):
+            streamlit_feedback(
+                feedback_type = "thumbs",
+                align = "flex-start",
+                key='feedback_key'
             )
-
-            # not functional because user feedback comes back empty
-            # # display feedback ui
-            # user_feedback = collector.st_feedback(
-            #     component="default",
-            #     feedback_type="thumbs",
-            #     model=st.session_state.logged_prompt.config_model.model,
-            #     prompt_id=st.session_state.logged_prompt.id,
-            #     open_feedback_label='[Optional] Provide additional feedback'
-            # )
-
-            # if user_feedback:
-
-            #     # log user feedback
-            #     trubrics.log_feedback(
-            #         component="default",
-            #         model=st.session_state.logged_prompt.config_model.model,
-            #         user_response=user_feedback,
-            #         prompt_id=st.session_state.logged_prompt.id
-            #     )
-
-            with st.form('form'):
-                streamlit_feedback(
-                    feedback_type = "thumbs",
-                    align = "flex-start",
-                    key='feedback_key'
-                )
-                st.text_input(
-                    label="Please elaborate on your response.",
-                    key="feedback_response"
-                )
-                st.form_submit_button('Submit', on_click=_submit_feedback)
+            st.text_input(
+                label="Please elaborate on your response.",
+                key="feedback_response"
+            )
+            st.form_submit_button('Submit', on_click=_submit_feedback)

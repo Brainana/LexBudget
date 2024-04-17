@@ -132,7 +132,7 @@ UITest = config.get('Server', 'UITest')
 
 embeddings = OpenAIEmbeddings()
 
-chroma_db = Chroma(persist_directory="chromadb_data", embedding_function=embeddings, collection_name="lc_chroma_lexbudget")
+chroma_db = Chroma(persist_directory="chromadb", embedding_function=embeddings, collection_name="lc_chroma_lexbudget")
 
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     
