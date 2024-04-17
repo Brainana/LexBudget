@@ -12,6 +12,13 @@ openai = ">= 1.6.1, < 2"
 streamlit = ">= 1.29.0, < 2"
 trubrics = {extras = ["streamlit"], version = "^1.6.2"}
 streamlit-javascript = "^0.1.5"
+chromadb = "^0.4.24"
+langchain = "^0.1.11"
+pypdf = "^4.1.0"
+tiktoken = "^0.6.0"
+langchain-community = "^0.0.27"
+langchain-openai = "^0.0.8"
+anthropic = "^0.19.1"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.2.0"

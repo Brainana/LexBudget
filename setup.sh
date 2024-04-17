@@ -13,6 +13,7 @@ port = $PORT\n\
 " > ~/.streamlit/config.toml
 
 sed -i "s/your-api-key-here/$OPENAI_API_KEY/" ./.streamlit/secrets.toml
+sed -i "s/your-claude-api-key-here/$CLAUDE_API_KEY/" ./.streamlit/secrets.toml
 sed -i "s/your-trubrics-email-here/$TRUBRICS_EMAIL/" ./.streamlit/secrets.toml
 sed -i "s/your-trubrics-pswd-here/$TRUBRICS_PASSWORD/" ./.streamlit/secrets.toml
 
