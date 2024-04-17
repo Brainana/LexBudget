@@ -1,1 +1,1 @@
-web: sh setup.sh && streamlit run Assistants_API.py
+web: sh setup.sh && streamlit run Chatbot.py
