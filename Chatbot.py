@@ -8,6 +8,16 @@ import pytz
 from trubrics.integrations.streamlit import FeedbackCollector
 from streamlit_feedback import streamlit_feedback
 from streamlit_javascript import st_javascript
+# import libraries for RAG + streaming
+from langchain_openai import ChatOpenAI
+from langchain_community.vectorstores import Chroma
+from langchain_openai import OpenAIEmbeddings
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnableParallel, RunnablePassthrough
+from langchain_core.pydantic_v1 import BaseModel
+from langchain_core.output_parsers import StrOutputParser
+# import libraries for metadata
+import json
 
 
 # import regex library
@@ -22,10 +32,9 @@ config.read('config.ini')
 # Get the debug configuration mode
 debug = config.get('Server', 'debug')
 
-st.set_page_config (page_title = config.get('Template', 'title'))
-
 # Set page title
 st.title(config.get('Template', 'title'))
+# st.markdown('Using LangChain framework + ChromaDB w/ metadata + OpenAI Chat Completions API')
 
 # Initialize OpenAI client with your own API key
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -37,6 +46,37 @@ collector = FeedbackCollector(
     password=st.secrets.TRUBRICS_PASSWORD,
 )
 
+# load metadata
+metadata = None
+with open("./scripts/vector_metadata.json", 'r') as file:
+    metadata = json.load(file)
+
+def getUpdatedTime(item):
+    return item[1]["updated_time"]
+
+# sort docs by recency, then pull latest book to get latest fiscal year
+metadata = dict(sorted(metadata.items(), key=getUpdatedTime, reverse=True))
+latestBrownBook = next(iter(metadata))
+currentFY = latestBrownBook[:6]
+
+# info from one year can be found in docs from later years -> update years list: e.g. an FY2022 answer may be found in the FY2022-FY2025 document
+def modifyYears(years):
+    newYearNums = set()
+    for year in years:
+        currYear = (int)(year[2:])
+        for i in range(0,4):
+            newYearNums.add(currYear+i)
+
+    modifiedYears = set()  
+    for yearNum in newYearNums:
+        year = "FY" + str(yearNum) + ".pdf"
+        if year in metadata:
+            modifiedYears.add(year[:-4])
+    
+    return modifiedYears
+
+
+# get client ip
 def client_ip():
     url = 'https://api.ipify.org?format=json'
     script = (f'await fetch("{url}").then('
@@ -50,7 +90,7 @@ def client_ip():
         else: return None
     except: return None
 
-
+# get user agent info 
 def get_user_agent():
     try:
         user_agent = st_javascript('navigator.userAgent')
@@ -101,235 +141,185 @@ else:
     thread = st.session_state["openai_thread"]
 
 # Get all previous messages in session state
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+if "metadataMessages" not in st.session_state:
+    st.session_state.metadataMessages = []
+
+# construct chat history string
+chatHistory = ""
+
+# get last query from session state
+lastQuery = ""
+if "lastQuery" in st.session_state:
+    lastQuery = st.session_state.lastQuery
 
 # Display all previous messages upon page refresh
 assistantAvatar = config.get('Template', 'assistantAvatar')
-numMsgs = len(st.session_state.messages)
-for index,message in enumerate(st.session_state.messages):
+numMsgs = len(st.session_state.metadataMessages)
+for index,message in enumerate(st.session_state.metadataMessages):
     if message["type"] == "message":
         if message["role"] == "assistant":
             with st.chat_message(message["role"], avatar=assistantAvatar):
                 st.markdown(message["content"], unsafe_allow_html=True)
-                if index < numMsgs - 1:
-                    # Add references in st.expander if applicable
-                    if st.session_state.messages[index+1]["type"] == "reference":
-                        with st.expander("References"):
-                            st.markdown(st.session_state.messages[index+1]["content"], unsafe_allow_html=True)
+                chatHistory += "LLM responded: " + message["content"] + "\n"
+                # if index < numMsgs - 1:
+                #     # Add references in st.expander if applicable
+                #     if st.session_state.metadataMessages[index+1]["type"] == "reference":
+                #         with st.expander("Retrieved Chunks (for debugging)"):
+                #             st.markdown(st.session_state.metadataMessages[index+1]["content"], unsafe_allow_html=True)
         else:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"], unsafe_allow_html=True)
+                chatHistory += "The user asked: " + message["content"] + "\n"
 
-# We use a predefined assistant with uploaded files
-# Should not create a new assistant every time the page refreshes
-assistantId=config.get('OpenAI', 'assistantId')
+embeddings = OpenAIEmbeddings()
 
-# Get UITest config
-UITest = config.get('Server', 'UITest')
-
+chroma_db = Chroma(persist_directory="chromadb", embedding_function=embeddings, collection_name="lc_chroma_lexbudget")
+    
 # Display the input text box
 chatInputPlaceholder = config.get('Template', 'chatInputPlaceholder')
 if prompt := st.chat_input(chatInputPlaceholder):
     # User has entered a question -> save it to the session state 
-    st.session_state.messages.append({"role": "user", "type": "message", "content": prompt})
+    st.session_state.metadataMessages.append({"role": "user", "type": "message", "content": prompt})
 
     # Copy the user's question in the chat window
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant", avatar=assistantAvatar):
-        # Create the ChatGPT message with the user's question
-        message = client.beta.threads.messages.create(
-            thread_id=thread.id,
-            role="user",
-            content=prompt
+
+        message_placeholder = st.empty()
+
+        # Track query start time
+        start_time = time.time()
+
+        # figure out relevant years for query
+        query = f"""Based on this prompt: {prompt} 
+        And this chat history: {chatHistory} 
+        What fiscal year or years is the user asking about? Give your answer in the format 'FY____, FY____, ...' with nothing else. 
+        If the user didn't specify a year or says 'current', assume they are talking about {currentFY}."""
+
+        years = client.chat.completions.create(
+            messages=[{"role": "user", "content": query}],
+            model="gpt-4-turbo-preview",
         )
+        strYears = years.choices[0].message.content
+        years = strYears.split(", ")
+        # info from one year can be found in docs from later years -> update years list: e.g. an FY2022 answer may be found in the FY2022-FY2025 document
+        years = list(modifyYears(years))
 
-        # If UITest is true then use dummy message instead of real message
-        if UITest == "true":
-            message = deserialize('dummyResponse.pickle')
+        # creating metadata filter that only searches documents in the relevant years
+        filter = None
+        if len(years) == 1:
+            filename = years[0] + ".pdf"
+            filter = {'updated_time': metadata[filename]['updated_time']}
         else:
-
-            # Track query start time
-            start_time = time.time()
-
-            # Query ChatGPT
-            run = client.beta.threads.runs.create(
-                thread_id=thread.id,
-                assistant_id=assistantId
-            )
-            
-            # Check query status
-            runStatus = None
-            # Display progress bar
-            progressText = "Retrieving in progress. Please wait."
-            progressValue = 0
-            progressBar = st.progress(0, text=progressText)
-            while runStatus != "completed":
-                # Update progress bar and make sure it's not exceeding 100
-                if progressValue < 99:
-                    progressValue += 1
-                else:
-                    progressValue = 1
-                progressBar.progress(progressValue, text=progressText)
-                time.sleep(0.1)
-
-                # Keep checking query status
-                run = client.beta.threads.runs.retrieve(
-                    thread_id=thread.id,
-                    run_id=run.id
-                )
-                if runStatus == "completed":
-                    progressBar.progress(100, text=progressText)
-                runStatus = run.status
-
-            # Remove progress bar
-            progressBar.empty()
-
-            # Track query end time
-            end_time = time.time()
-            query_time = end_time - start_time
-
-            # construct metadata to be logged
-            metadata={
-                "query_time": f"{query_time:.2f} sec",
-                "start_time": convert_to_est(start_time),
-                "end_time": convert_to_est(end_time),
-                "assistant_id": assistantId,
-                "user_ip": user_ip,
-                "user_agent": user_agent
+            filter={
+                '$or': []
             }
+            for year in years:
+                filename = year + ".pdf"
+                yearFilter = {
+                    'updated_time': {
+                        '$eq': metadata[filename]['updated_time']
+                    }
+                }
+                filter['$or'].append(yearFilter)
 
-            # Get all messages from the thread
-            messages = client.beta.threads.messages.list(
-                thread_id=thread.id,
-                # make sure thread is ordered with latest messages first
-                order='desc'
-            )
+        # rephrase user query to explicitly restate prompt -> similarity search is more accurate
+        query = f"""Rephrase the following query to explicitly state the question: {prompt}
+        Given this previous user query: {lastQuery}
+        And that the query is asking about the following year(s): {strYears}
+        """
 
-            # If latest message is not from assistant, sleep to give Assistants API time to add GPT-4 response to thread
-            if messages.data[0].role != 'assistant':
-                time.sleep(2)
-                messages = client.beta.threads.messages.list(
-                    thread_id=thread.id,
-                    # Make sure thread is ordered with latest messages first
-                    order='desc'
-                )    
-            
-            message = None
-            if messages.data[0].role != 'assistant':
-                errorResponse = """OpenAI's Assistants API failed to return a response, please change your query and try again.<br>
-                Tips to improve your queries:<br>
-                &nbsp;&nbsp;- Provide a specific year or years<br>
-                &nbsp;&nbsp;- Provide a specific area of the town budget<br>
-                &nbsp;&nbsp;- Avoid abbreviations"""
-                metadata["threadmsgs"] = messages
-                # If assistant still doesn't return response, make an error response
-                message = client.beta.threads.messages.create(
-                    thread_id=thread.id,
-                    role="user",
-                    content=errorResponse
-                )
-            else:
-                # Retrieve the message object from the assistant
-                message = client.beta.threads.messages.retrieve(
-                    thread_id=thread.id,
-                    # Use the latest message from the assistant
-                    message_id=messages.data[0].id
-                )
+        rephrasedPrompt = client.chat.completions.create(
+            messages=[{"role": "user", "content": query}],
+            model="gpt-4-turbo-preview",
+        )
+        rephrasedPrompt = rephrasedPrompt.choices[0].message.content
+        st.session_state.lastQuery = rephrasedPrompt
 
-        if debug == "true":
-            # Use Streamlit Magic commands to output message, which is a feature that allows dev to write
-            # markdown, data, charts, etc without having to write an explicit command
-            message
+        message_placeholder.markdown("Searching for: <b>" + rephrasedPrompt + "</b>", unsafe_allow_html=True)
 
-            # Used for serialize response to a pickle file for use as a dummy
-            # message_content = message.content[0].text
-            # message_content.value = "<b>This is a dummy assistant response used for testing.</b><br>" + message_content.value
-            # serialize(message, 'dummyResponse.pickle')
+        # get relevant documents from vector db w/ similarity search
+        # we fetch 4*<num of queried years> docs since if multiple years are asked more docs need to be fetched
+        docs = chroma_db.similarity_search_with_relevance_scores(rephrasedPrompt, k=4*len(years), filter=filter)
 
-        # Extract the message content
-        message_content = message.content[0].text
-        annotations = message_content.annotations
-        citations = []
+        # sort docs by updated time + relevance score
+        top_docs = sorted(docs, key=lambda doc: (-doc[0].metadata['updated_time'], -doc[1]))
 
-        # When there are multiple files associated with an assistant, annotations will return as empty: 
-        # see https://community.openai.com/t/assistant-api-always-return-empty-annotations/489285
-        if len(annotations) == 0:
-            message_content.value = re.sub(r'【[\d:]+†source】', '', message_content.value)
+        context = ""
+        references = ""
+        for doc in top_docs:
+            source = doc[0].metadata['source'].replace("\\","/")
+            page = str(doc[0].metadata['page'])
+            end_page = str(doc[0].metadata['end_page'])
+            link = "<a href='https://brainana.github.io/LexBudgetDocs/" + source + "#page=" + page + "'>" + source + " (page(s) " + page + " to " + end_page + ")</a> <br>"
+            context += "Please exactly reference the following link in the generated response: " + link + " if the following content is used to generate the response: " + doc[0].page_content + "\n"
+            references += link
+        
+        # with st.expander("Rephrased Prompt (for debugging)"):
+        #     st.markdown(rephrasedPrompt, unsafe_allow_html=True)
+        # with st.expander("Most Relevant Chunks w/ Similarity Score (for debugging)"):
+        #     st.write(docs)
+        # with st.expander("Links to Relevant Chunks (for debugging)"):
+        #     st.markdown(references, unsafe_allow_html=True)
 
-        # Iterate over the annotations and add footnotes
-        for index, annotation in enumerate(annotations):
+        query = f"""Given this chat history: {chatHistory}
+        And the following context: {context}
+        Answer this user query: {rephrasedPrompt}
+        Prioritize finding information on the actual historical spending amounts if applicable, and if these cannot be found search for information on the estimated or projected spending amounts.
+        """
 
-            # Gather citations based on annotation attributes
-            if (file_citation := getattr(annotation, 'file_citation', None)):
-                if not file_citation.file_id:
-                    # Do not provide footnote if file id of citation is empty
-                    message_content.value = message_content.value.replace(annotation.text, '')
-                else:
-                    # Replace the annotations with a footnote
-                    message_content.value = message_content.value.replace(annotation.text, f' <sup><a href="#cite_note-{message.id}-{index}">[{index}]</a></sup>')
-                    cited_file = client.files.retrieve(file_citation.file_id)
-                    citations.append(f'<div id="cite_note-{message.id}-{index}" style="font-size: 90%">[{index}]: {cited_file.filename} <br><br> {file_citation.quote}</div>')
-            else:
-                # Do not provide footnote if file for citation cannot be found
-                message_content.value = message_content.value.replace(annotation.text, '')
- 
-        # Prevent latex formatting by replacing $ with html dollar literal
-        message_content.value = message_content.value.replace('$','&dollar;')
+        full_response = ""
 
-        # Display assistant message
-        st.markdown(message_content.value, unsafe_allow_html=True)
+        # stream response
+        for response in client.chat.completions.create(
+            stream=True,
+            messages=[{"role": "user", "content": query}],
+            model="gpt-4-turbo-preview",
+        ): 
+            full_response += (response.choices[0].delta.content or "")
+            # Prevent latex formatting by replacing $ with html dollar literal
+            full_response = full_response.replace('$','&#36;')
+            message_placeholder.markdown(full_response + "▌", unsafe_allow_html=True)
+       
+        message_placeholder.markdown(full_response, unsafe_allow_html=True)
+
+        # Track query end time
+        end_time = time.time()
+        query_time = end_time - start_time
+
+        # construct metadata to be logged
+        metadata={
+            "query_time": f"{query_time:.2f} sec",
+            "start_time": convert_to_est(start_time),
+            "end_time": convert_to_est(end_time)
+            # "assistant_id": assistantId,
+            # "user_ip": user_ip,
+            # "user_agent": user_agent
+        }
 
         # Save the assistant's message in session state (we do this in addition to 
         # saving the thread because we processed the message after retrieving it)
-        st.session_state.messages.append({"role": "assistant",  "type": "message", "content": message_content.value})
-
-        # Add footnotes to the end of the message before displaying to user
-        if len(citations) > 0:
-            with st.expander("References"):
-                references = '\n'.join(citations).replace('$', '&dollar;')
-                st.markdown(references, unsafe_allow_html=True)
-                st.session_state.messages.append({"role": "assistant",  "type": "reference", "content": references})
+        st.session_state.metadataMessages.append({"role": "assistant",  "type": "message", "content": full_response})
+        st.session_state.metadataMessages.append({"role": "assistant",  "type": "reference", "content": references})
 
         # log user query + assistant response + metadata 
-        if UITest != "true":
-            st.session_state.logged_prompt = collector.log_prompt(
-                config_model={"model": "gpt-4-turbo-preview"},
-                prompt=prompt,
-                generation=message_content.value,
-                metadata=metadata
+        st.session_state.logged_prompt = collector.log_prompt(
+            config_model={"model": "gpt-4-turbo-preview"},
+            prompt=prompt,
+            generation=full_response,
+            metadata=metadata
+        )
+
+        with st.form('form'):
+            streamlit_feedback(
+                feedback_type = "thumbs",
+                align = "flex-start",
+                key='feedback_key'
             )
-
-            # not functional because user feedback comes back empty
-            # # display feedback ui
-            # user_feedback = collector.st_feedback(
-            #     component="default",
-            #     feedback_type="thumbs",
-            #     model=st.session_state.logged_prompt.config_model.model,
-            #     prompt_id=st.session_state.logged_prompt.id,
-            #     open_feedback_label='[Optional] Provide additional feedback'
-            # )
-
-            # if user_feedback:
-
-            #     # log user feedback
-            #     trubrics.log_feedback(
-            #         component="default",
-            #         model=st.session_state.logged_prompt.config_model.model,
-            #         user_response=user_feedback,
-            #         prompt_id=st.session_state.logged_prompt.id
-            #     )
-
-            with st.form('form'):
-                streamlit_feedback(
-                    feedback_type = "thumbs",
-                    align = "flex-start",
-                    key='feedback_key'
-                )
-                st.text_input(
-                    label="Please elaborate on your response.",
-                    key="feedback_response"
-                )
-                st.form_submit_button('Submit', on_click=_submit_feedback)
+            st.text_input(
+                label="Please elaborate on your response.",
+                key="feedback_response"
+            )
+            st.form_submit_button('Submit', on_click=_submit_feedback)
