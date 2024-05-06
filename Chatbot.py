@@ -267,6 +267,7 @@ if prompt := st.chat_input(chatInputPlaceholder):
         query = f"""Given this chat history: {chatHistory}
         And the following context: {context}
         Answer this user query: {rephrasedPrompt}
+        If the user inquires about percentages, prioritize providing the direct percentage number from the document rather than calculating it.
         Prioritize finding information on the actual historical spending amounts if applicable, and if these cannot be found search for information on the estimated or projected spending amounts.
         """
 

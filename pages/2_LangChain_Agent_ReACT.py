@@ -306,9 +306,9 @@ References:
 async def awaitable_function(obj):
     return obj
 
-class schoolTool(BaseTool):
+class SchoolTool(BaseTool):
     name = "school_budget_search"
-    description = "Good for answering questions about the school or education budget for " + ', '.join(getSchoolDocYears()) + "."
+    description = "Good for answering questions about the school or education budget for " + ', '.join(getSchoolDocYears()) + ". For other years, use the general_budget_search tool."
 
     def _helper(self, query):
         st.session_state.debugText += f"""Key idea extracted by agent:
@@ -326,7 +326,7 @@ class schoolTool(BaseTool):
         return awaitable_function(vectorText)
 
 
-class brownBookTool(BaseTool):
+class BrownBookTool(BaseTool):
     name = "general_budget_search"
     description = "Good for answering general budget questions."
 
@@ -347,8 +347,8 @@ class brownBookTool(BaseTool):
         vectorText = self._helper(query)
         return awaitable_function(vectorText)
 
-schoolTool = schoolTool()
-brownBookTool = brownBookTool()
+schoolTool = SchoolTool()
+brownBookTool = BrownBookTool()
 tools = [schoolTool, brownBookTool]
 
 llm = ChatOpenAI(temperature=0, model_name="gpt-4-turbo-preview")
