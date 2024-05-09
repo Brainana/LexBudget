@@ -200,7 +200,7 @@ def determineYears():
     yearQuery = f"""
     {lastQuerySection}
     given the current user query: {chat_history[-1]}
-    What fiscal year or years is the user asking about in the current query? Give your answer in the format 'FY____, FY____, ...' with nothing else. 
+    What fiscal year or years is the user asking about? Years are typically in the format "YYYY" (e.g. 2024). Give your answer in the format 'FY____, FY____, ...' with nothing else. 
     If the user didn't specify a year or says 'current', assume they are talking about {currentFY}."""
 
     years = client.chat.completions.create(
