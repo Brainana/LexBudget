@@ -195,7 +195,7 @@ if prompt := st.chat_input(chatInputPlaceholder):
         # figure out relevant years for query
         query = f"""Based on this prompt: {prompt} 
         And this chat history: {chatHistory} 
-        What fiscal year or years is the user asking about? Give your answer in the format 'FY____, FY____, ...' with nothing else. 
+        What fiscal year or years is the user asking about? Years are typically in the format "YYYY" (e.g. 2024). Give your answer in the format 'FY____, FY____, ...' with nothing else. 
         If the user didn't specify a year or says 'current', assume they are talking about {currentFY}."""
 
         years = client.chat.completions.create(
@@ -267,7 +267,7 @@ if prompt := st.chat_input(chatInputPlaceholder):
         query = f"""Given this chat history: {chatHistory}
         And the following context: {context}
         Answer this user query: {rephrasedPrompt}
-        Prioritize finding information on the actual historical spending amounts if applicable, and if these cannot be found search for information on the estimated or projected spending amounts.
+        If the user inquires about percentages, prioritize providing the direct percentage number from the document rather than calculating it.
         """
 
         full_response = ""
