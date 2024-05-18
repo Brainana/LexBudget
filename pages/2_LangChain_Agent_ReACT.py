@@ -169,20 +169,6 @@ lastQuery = ""
 if "lastQuery" in st.session_state:
     lastQuery = st.session_state.lastQuery
 
-# Display all previous messages upon page refresh
-assistantAvatar = config.get('Template', 'assistantAvatar')
-numMsgs = len(st.session_state.reactMessages)
-for index,message in enumerate(st.session_state.reactMessages):
-    if message["type"] == "message":
-        if message["role"] == "assistant":
-            with st.chat_message(message["role"], avatar=assistantAvatar):
-                st.markdown(message["content"], unsafe_allow_html=True)
-                chat_history.append(AIMessage(content=message["content"]))
-        else:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"], unsafe_allow_html=True)
-                chat_history.append(HumanMessage(content=message["content"]))
-
 embeddings = OpenAIEmbeddings()
 
 brownBookCollection = Chroma(persist_directory="chromadb", embedding_function=embeddings, collection_name="lc_chroma_lexbudget")
@@ -224,7 +210,7 @@ def rephraseQuery(query, years):
     rephrasedQuery = f"""
     {lastQuerySection}
     Rephrase the following query by explicitly asking about these year(s): {years}
-    {query}
+    {chat_history[-1].content}
     """
 
     rephrasedPrompt = client.chat.completions.create(
@@ -281,12 +267,14 @@ metadata filter:
     # get context from docs
     context = ""
     references = ""
-    for doc in top_vectors:
+    # for doc in top_vectors:
+    for index, doc in enumerate(top_vectors):
         source = doc[0].metadata['source'].replace("\\","/")
         page = str(doc[0].metadata['page'])
         end_page = str(doc[0].metadata['end_page'])
-        link = "<a href='https://brainana.github.io/LexBudgetDocs/" + source + "#page=" + page + "'>" + source + " (page(s) " + page + " to " + end_page + ")</a> <br>"
-        context += "Please exactly reference the following link in the generated response: " + link + " if the following content is used to generate the response: " + doc[0].page_content + "\n"
+        link = "<a href='https://brainana.github.io/LexBudgetDocs/" + source + "#page=" + page + "'>" + source + " (page(s) " + page + " to " + end_page + ")</a>"
+        # context += "Please exactly reference the following link in the generated response: " + link + " if the following content is used to generate the response: " + doc[0].page_content + "\n"
+        context += "vector #: " + str(index + 1) + "\n\nSimilarity search score: " + str(doc[1]) + "\n\nReference link: " + link + "\n\nText: " + doc[0].page_content + "\n\n"
         references += link
     
     # with st.expander("(for debugging)"):
@@ -308,7 +296,7 @@ async def awaitable_function(obj):
 
 class SchoolTool(BaseTool):
     name = "school_budget_search"
-    description = "Good for answering questions about the school or education budget for " + ', '.join(getSchoolDocYears()) + ". For other years, use the general_budget_search tool."
+    description = "Good for answering questions about the school or education budget for " + ', '.join(getSchoolDocYears()) + ". For budget inquiries pertaining to other years, we recommend utilizing the General Budget Search tool."
 
     def _helper(self, query):
         st.session_state.debugText += f"""Key idea extracted by agent:
@@ -359,7 +347,17 @@ prompt = ChatPromptTemplate.from_messages(
         (
             "system",
             """You are a financial assistant that is very knowledgable on the budget of the town of Lexington.
-            If the user inquires about percentages, prioritize providing the direct percentage number from the document rather than calculating it."""
+
+            Generate your prompt by priotizing the vectors with the highest similarity score.
+
+            If the user inquires about percentages, prioritize providing the direct percentage number from the document rather than calculating it.
+
+            Budget info for one year can be found in documents from subsequent years up to 4 years after. 
+            For example, a data point for FY2022 can be found in docs from FY2022 to FY2025.
+            Prioritize using data from more recent years to form your answer, since actual figures rather than projected figures are more likely to be found in more recent documents.
+
+            Please link the vectors you used to generate your response.
+            """
         ),
         ("user", "{input}"),
         MessagesPlaceholder("chat_history"),
@@ -415,10 +413,19 @@ async def runAgent(userQuery, chat_history):
         elif kind == "on_tool_end":
             st.session_state.debugText += f"\nEnding tool: {event['name']}\n--\n\n"
 
-# Display the input text box
-chatInputPlaceholder = config.get('Template', 'chatInputPlaceholder')
-if userQuery := st.chat_input(chatInputPlaceholder):
+# listIcons = [
+#     ":large_green_circle:",
+#     ":large_green_circle:",
+#     ":large_green_circle:"
+# ]
+sampleQuestions = config.get('Template', 'sampleQuestions').split('|')
+st.markdown('<p style="font-size: 18px;"><b><i>Sample questions that you could try:</i></b></p>', unsafe_allow_html=True)
+questionBtns = []
+for index, question in enumerate(sampleQuestions):
+    # iconIndex = index % len(listIcons)
+    questionBtns.append(st.button(f":large_green_circle: {question}", type="secondary"))
 
+def answerQuery(userQuery):
     chat_history.append(HumanMessage(content=userQuery))
 
     # User has entered a question -> save it to the session state 
@@ -429,8 +436,11 @@ if userQuery := st.chat_input(chatInputPlaceholder):
         st.markdown(userQuery)
 
     with st.chat_message("assistant", avatar=assistantAvatar):
-
+        
+        global message_placeholder
         message_placeholder = st.empty()
+
+        message_placeholder.markdown('<img src="https://brainana.github.io/LexBudgetDocs/images/loading_icon.gif" width=32>', unsafe_allow_html=True)
 
         # Track query start time
         start_time = time.time()
@@ -480,3 +490,26 @@ if userQuery := st.chat_input(chatInputPlaceholder):
                 key="feedback_response"
             )
             st.form_submit_button('Submit', on_click=_submit_feedback)
+
+# Display all previous messages upon page refresh
+assistantAvatar = config.get('Template', 'assistantAvatar')
+numMsgs = len(st.session_state.reactMessages)
+for index,message in enumerate(st.session_state.reactMessages):
+    if message["type"] == "message":
+        if message["role"] == "assistant":
+            with st.chat_message(message["role"], avatar=assistantAvatar):
+                st.markdown(message["content"], unsafe_allow_html=True)
+                chat_history.append(AIMessage(content=message["content"]))
+        else:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"], unsafe_allow_html=True)
+                chat_history.append(HumanMessage(content=message["content"]))
+
+# Display the input text box
+chatInputPlaceholder = config.get('Template', 'chatInputPlaceholder')
+if userQuery := st.chat_input(chatInputPlaceholder):
+    answerQuery(userQuery)
+
+for index, questionBtn in enumerate(questionBtns):
+    if questionBtn:
+        answerQuery(sampleQuestions[index])
