@@ -1,6 +1,10 @@
 """
 Usage:
-python scripts/create_chromadb.py --inputDirectory /path/to/directory/ --inputMetadataFile /path/to/file/ --outputDirectory /path/to/directory/
+python scripts/create_chromadb.py --inputDirectory /path/to/directory/ --inputMetadataFile /path/to/file/ --outputDirectory /path/to/directory/ --collectionName name
+
+Example:
+python scripts/create_chromadb.py --inputDirectory brown_books --inputMetadataFile scripts/vector_metadata.json --outputDirectory chromadb --collectionName lc_chroma_lexbudget
+python scripts/create_chromadb.py --inputDirectory school_docs --inputMetadataFile scripts/school_docs_metadata.json --outputDirectory chromadb --collectionName lc_chroma_schoolbudget
 """
 
 import os
@@ -16,6 +20,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--inputDirectory", type=str, required=True)
 parser.add_argument("--inputMetadataFile", type=str, required=True)
 parser.add_argument("--outputDirectory", type=str, required=True)
+parser.add_argument("--collectionName", type=str, required=True)
 args = parser.parse_args()
 
 # load metadata
@@ -52,5 +57,5 @@ chroma_db = Chroma.from_documents(
     collection_metadata={"hnsw:space": "cosine"},
     embedding=embeddings, 
     persist_directory=args.outputDirectory, 
-    collection_name="lc_chroma_lexbudget"
+    collection_name=args.collectionName
 )

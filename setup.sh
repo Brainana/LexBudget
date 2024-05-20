@@ -10,7 +10,7 @@ echo "\
 headless = true\n\
 enableCORS=false\n\
 port = $PORT\n\
-" > ~/.streamlit/config.toml
+" >> ~/.streamlit/config.toml
 
 sed -i "s/your-api-key-here/$OPENAI_API_KEY/" ./.streamlit/secrets.toml
 sed -i "s/your-claude-api-key-here/$CLAUDE_API_KEY/" ./.streamlit/secrets.toml
