@@ -206,11 +206,13 @@ def rephraseQuery(query, years):
 
     lastQuerySection = ""
     if lastQuery != "":
-        lastQuerySection = f"Given this previous user query: {lastQuery}"
+        lastQuerySection = f"There may be additional required context that is found in the previous user query: {lastQuery}"
     rephrasedQuery = f"""
-    {lastQuerySection}
-    Rephrase the following query by explicitly asking about these year(s): {years}
+    Rephrase the following query:
     {chat_history[-1].content}
+    Such that it queries about the following year(s):
+    {years}
+    {lastQuerySection}
     """
 
     rephrasedPrompt = client.chat.completions.create(
@@ -349,6 +351,7 @@ prompt = ChatPromptTemplate.from_messages(
             """You are a financial assistant that is very knowledgable on the budget of the town of Lexington.
 
             Generate your prompt by priotizing the vectors with the highest similarity score.
+            Ensure the response reflects the content of the search vector that matches most closely to the input query.
 
             If the user inquires about percentages, prioritize providing the direct percentage number from the document rather than calculating it.
 
@@ -440,7 +443,7 @@ def answerQuery(userQuery):
         global message_placeholder
         message_placeholder = st.empty()
 
-        message_placeholder.markdown('<img src="https://brainana.github.io/LexBudgetDocs/images/loading_icon.gif" width=32>', unsafe_allow_html=True)
+        message_placeholder.markdown('Please wait...&nbsp;&nbsp;<img src="https://brainana.github.io/LexBudgetDocs/images/loading_icon.gif" width=25>', unsafe_allow_html=True)
 
         # Track query start time
         start_time = time.time()
