@@ -120,16 +120,16 @@ def get_user_agent():
 # user_agent = get_user_agent()
 
 # handle feedback submissions
-def _submit_feedback():
-    if st.session_state.feedback_key is None:
-        st.session_state.feedback_key = {'type': ""}
-    st.session_state.feedback_key['text'] = st.session_state.feedback_response
-    collector.log_feedback(
-        component="default",
-        model=st.session_state.logged_userQuery.config_model.model,
-        user_response=st.session_state.feedback_key,
-        userQuery_id=st.session_state.logged_userQuery.id
-    )
+# def _submit_feedback():
+#     if st.session_state.feedback_key is None:
+#         st.session_state.feedback_key = {'type': ""}
+#     st.session_state.feedback_key['text'] = st.session_state.feedback_response
+#     collector.log_feedback(
+#         component="default",
+#         model=st.session_state.logged_prompt.config_model.model,
+#         user_response=st.session_state.feedback_key,
+#         userQuery_id=st.session_state.logged_prompt.id
+#     )
 
 # Helper function to convert Unix timestamp to datetime object in EST timezone
 def convert_to_est(unix_timestamp):
@@ -482,17 +482,28 @@ def answerQuery(userQuery):
             metadata=metadata
         )
 
-        with st.form('form'):
-            streamlit_feedback(
-                feedback_type = "thumbs",
-                align = "flex-start",
-                key='feedback_key'
-            )
-            st.text_input(
-                label="Please elaborate on your response.",
-                key="feedback_response"
-            )
-            st.form_submit_button('Submit', on_click=_submit_feedback)
+        # log user feedback
+        user_feedback = collector.st_feedback(
+            component="default",
+            feedback_type="thumbs",
+            open_feedback_label="[Optional] Provide additional feedback",
+            model=st.session_state.logged_prompt.config_model.model,
+            prompt_id=st.session_state.logged_prompt.id,
+            key="feedback_key",
+            align="flex-start"
+        )
+
+        # with st.form('form'):
+        #     streamlit_feedback(
+        #         feedback_type = "thumbs",
+        #         align = "flex-start",
+        #         key='feedback_key'
+        #     )
+        #     st.text_input(
+        #         label="Please elaborate on your response.",
+        #         key="feedback_response"
+        #     )
+        #     st.form_submit_button('Submit', on_click=_submit_feedback)
 
 # Display all previous messages upon page refresh
 assistantAvatar = config.get('Template', 'assistantAvatar')
