@@ -428,6 +428,40 @@ for index, question in enumerate(sampleQuestions):
     # iconIndex = index % len(listIcons)
     questionBtns.append(st.button(f":large_green_circle: {question}", type="secondary"))
 
+if 'clicked' not in st.session_state:
+    st.session_state.clicked = False
+clickedQuestion = None
+
+if 'clicked_question' not in st.session_state:
+    st.session_state.clicked_question = None
+
+def click_button(question):
+    print("button clicked!" + question)
+    st.session_state.clicked = True
+    st.session_state.clicked_question = question
+
+follow_up_questions = []
+followUpBtns = []
+def suggestFollowUps():
+    follow_up_query = f"""
+    Given this chat history {chat_history}, Suggest 2 follow-up questions the user 
+    might ask next. Give your answer in the format where each line has a separate 
+    question. Do not number your responses."""
+
+    follow_up_suggestions = client.chat.completions.create(
+        messages=[{"role": "user", "content": follow_up_query}],
+        model="gpt-4-turbo-preview",
+    )
+    follow_up_questions = follow_up_suggestions.choices[0].message.content.split('\n')
+    follow_up_questions = [question for question in follow_up_questions if question.strip()] #removes empty strings
+    print(follow_up_suggestions)
+    print(follow_up_questions)
+
+    st.markdown('<p style="font-size: 18px;"><b><i>Follow-up questions that you could try:</i></b></p>', unsafe_allow_html=True)
+    for index, question in enumerate(follow_up_questions):
+        print(question)
+        followUpBtns.append(st.button(f":large_green_circle: {question}", on_click=click_button, args=[question]))
+
 def answerQuery(userQuery):
     chat_history.append(HumanMessage(content=userQuery))
 
@@ -493,6 +527,8 @@ def answerQuery(userQuery):
             align="flex-start"
         )
 
+        suggestFollowUps()
+
         # with st.form('form'):
         #     streamlit_feedback(
         #         feedback_type = "thumbs",
@@ -526,4 +562,9 @@ if userQuery := st.chat_input(chatInputPlaceholder):
 
 for index, questionBtn in enumerate(questionBtns):
     if questionBtn:
+        print("clicked sample question button")
         answerQuery(sampleQuestions[index])
+
+if st.session_state.clicked_question:
+    answerQuery(st.session_state.clicked_question)
+    st.session_state.clicked_question = None
