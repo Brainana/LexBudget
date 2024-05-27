@@ -4,6 +4,7 @@ import configparser
 import time
 from datetime import datetime
 import pytz
+from typing import List
 # import libraries for user feedback
 from trubrics.integrations.streamlit import FeedbackCollector
 from streamlit_feedback import streamlit_feedback
@@ -29,6 +30,20 @@ import json
 import re
 # import serialization/deserialization library
 import pickle
+# import for structured response
+from langchain_core.pydantic_v1 import BaseModel
+
+st.markdown(
+    """
+<style>
+button {
+    text-align: left;
+    font-size: 12px;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
 
 # Get the specific configuration for the app
 config = configparser.ConfigParser()
@@ -43,6 +58,9 @@ st.title(config.get('Template', 'title'))
 
 # Initialize OpenAI client with your own API key
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+# llm model version
+model = "gpt-4o-2024-05-13"
 
 # Initialize feedback collector
 collector = FeedbackCollector(
@@ -191,7 +209,7 @@ def determineYears():
 
     years = client.chat.completions.create(
         messages=[{"role": "user", "content": yearQuery}],
-        model="gpt-4-turbo-preview",
+        model=model,
     )
     years = years.choices[0].message.content.split(', ')
 
@@ -217,7 +235,7 @@ def rephraseQuery(query, years):
 
     rephrasedPrompt = client.chat.completions.create(
         messages=[{"role": "user", "content": rephrasedQuery}],
-        model="gpt-4-turbo-preview",
+        model=model,
     )
     rephrasedPrompt = rephrasedPrompt.choices[0].message.content
 
@@ -341,7 +359,7 @@ schoolTool = SchoolTool()
 brownBookTool = BrownBookTool()
 tools = [schoolTool, brownBookTool]
 
-llm = ChatOpenAI(temperature=0, model_name="gpt-4-turbo-preview")
+llm = ChatOpenAI(temperature=0, model_name=model)
 llm_with_tools = llm.bind_tools(tools)
 
 prompt = ChatPromptTemplate.from_messages(
@@ -426,7 +444,40 @@ st.markdown('<p style="font-size: 18px;"><b><i>Sample questions that you could t
 questionBtns = []
 for index, question in enumerate(sampleQuestions):
     # iconIndex = index % len(listIcons)
-    questionBtns.append(st.button(f":large_green_circle: {question}", type="secondary"))
+    questionBtns.append(st.button(f"{question}", type="secondary"))
+
+if 'clicked_follow_up' not in st.session_state:
+    st.session_state.clicked_follow_up = None
+if 'follow_ups' not in st.session_state:
+    st.session_state.follow_ups = []
+
+def click_follow_up(question):
+    st.session_state.clicked_follow_up = question
+
+follow_up_questions = []
+follow_up_btns = []
+
+class FollowUpQuestions(BaseModel):
+    """Follow up questions."""
+    questions: List[str]
+
+def suggest_follow_ups():
+
+    follow_up_query = f"""
+    Given this chat history {chat_history[-2:]}, Suggest 2 follow-up questions the user 
+    might ask next."""
+
+    structured_llm = llm.with_structured_output(FollowUpQuestions)
+    response = structured_llm.invoke(follow_up_query)
+    follow_up_questions = response.questions
+
+    for index, question in enumerate(follow_up_questions):
+        st.session_state.follow_ups.append(question)
+
+def display_follow_ups():
+    st.markdown('<p style="font-size: 16px;"><b><i>Follow-up questions that you could try:</i></b></p>', unsafe_allow_html=True)
+    for follow_up in (st.session_state.follow_ups):
+        follow_up_btns.append(st.button(f"{follow_up}", on_click=click_follow_up, args=[follow_up]))
 
 def answerQuery(userQuery):
     chat_history.append(HumanMessage(content=userQuery))
@@ -476,7 +527,7 @@ def answerQuery(userQuery):
 
         # log user query + assistant response + metadata 
         st.session_state.logged_prompt = collector.log_prompt(
-            config_model={"model": "gpt-4-turbo-preview"},
+            config_model={"model": model},
             prompt=userQuery,
             generation=full_response,
             metadata=metadata
@@ -492,6 +543,10 @@ def answerQuery(userQuery):
             key="feedback_key",
             align="flex-start"
         )
+
+        st.session_state.follow_ups = []
+
+        suggest_follow_ups()
 
         # with st.form('form'):
         #     streamlit_feedback(
@@ -527,3 +582,10 @@ if userQuery := st.chat_input(chatInputPlaceholder):
 for index, questionBtn in enumerate(questionBtns):
     if questionBtn:
         answerQuery(sampleQuestions[index])
+
+if st.session_state.clicked_follow_up:
+    answerQuery(st.session_state.clicked_follow_up)
+    st.session_state.clicked_follow_up = None
+
+if st.session_state.follow_ups:
+    display_follow_ups()
