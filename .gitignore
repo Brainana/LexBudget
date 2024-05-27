@@ -13,6 +13,3 @@ __pycache__/
 .coverage
 coverage.xml
 .pytest_cache/
-
-# Ignore all length.bin files within any subdirectory of chromadb
-chromadb/**/length.bin
