@@ -5,6 +5,7 @@ python scripts/create_chromadb.py --inputDirectory /path/to/directory/ --inputMe
 Example:
 python scripts/create_chromadb.py --inputDirectory brown_books --inputMetadataFile scripts/vector_metadata.json --outputDirectory chromadb --collectionName lc_chroma_lexbudget
 python scripts/create_chromadb.py --inputDirectory school_docs --inputMetadataFile scripts/school_docs_metadata.json --outputDirectory chromadb --collectionName lc_chroma_schoolbudget
+python scripts/create_chromadb.py --inputDirectory arlington_reports --inputMetadataFile scripts/arlington_vector_metadata.json --outputDirectory chromadb_arlington --collectionName lc_chroma_arlingtonbudget
 """
 
 import os
