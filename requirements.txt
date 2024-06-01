@@ -5,7 +5,6 @@ langchain_community==0.2.1
 langchain_core==0.2.3
 langchain_groq==0.1.4
 langchain_openai==0.1.8
-llama_index==0.10.42
 openai==1.30.5
 Pillow==10.3.0
 pydantic==2.7.2
