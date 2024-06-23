@@ -31,8 +31,10 @@ with col1_sub:
     col1_sub.write("Kevin Zhu")
     col1_sub.write("Jasmine Gu")
     col1_sub.write("Justin Wang")
+    col1_sub.write("Cassidy Xu")
     col1_sub.write("Emma He")
     col1_sub.write("Willam Yang")
+    col1_sub.write("Andrew Pan")
     col1_sub.write("Joley Leung (Graphics)")
 
 with col2_sub:
