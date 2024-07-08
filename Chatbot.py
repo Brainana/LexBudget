@@ -290,9 +290,8 @@ metadata filter:
     # for doc in top_vectors:
     for index, doc in enumerate(top_vectors):
         source = doc[0].metadata['source'].replace("\\","/")
-        page = str(doc[0].metadata['page'])
-        end_page = str(doc[0].metadata['end_page'])
-        link = "<a href='https://brainana.github.io/LexBudgetDocs/" + source + "#page=" + page + "'>" + source + " (page(s) " + page + " to " + end_page + ")</a>"
+        page = str(doc[0].metadata['page']+1)
+        link = "<a href='https://brainana.github.io/LexBudgetDocs/" + source + "#page=" + page + "'>" + source + " (page " + page + ")</a>"
         # context += "Please exactly reference the following link in the generated response: " + link + " if the following content is used to generate the response: " + doc[0].page_content + "\n"
         context += "vector #: " + str(index + 1) + "\n\nSimilarity search score: " + str(doc[1]) + "\n\nReference link: " + link + "\n\nText: " + doc[0].page_content + "\n\n"
         references += link

@@ -41,11 +41,6 @@ for file_name in file_list:
         loader = PyPDFLoader(file_path)
         chunks = loader.load_and_split()
         for index, chunk in enumerate(chunks):
-            if index == len(chunks) - 1:
-                chunk.metadata["end_page"] = 0
-            else:
-                chunk.metadata["end_page"] = chunks[index+1].metadata["page"]
-
             chunk.metadata['updated_time'] = metadata[file_name]['updated_time']
             all_docs.append(chunk)
 
