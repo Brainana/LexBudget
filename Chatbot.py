@@ -356,7 +356,8 @@ class BrownBookTool(BaseTool):
 
 schoolTool = SchoolTool()
 brownBookTool = BrownBookTool()
-tools = [schoolTool, brownBookTool]
+# tools = [schoolTool, brownBookTool]
+tools = [brownBookTool]
 
 llm = ChatOpenAI(temperature=0, model_name=model)
 llm_with_tools = llm.bind_tools(tools)
@@ -377,6 +378,10 @@ prompt = ChatPromptTemplate.from_messages(
             Prioritize using data from more recent years to form your answer, since actual figures rather than projected figures are more likely to be found in more recent documents.
 
             Please link the vectors you used to generate your response.
+
+            If any required term is missing, clearly state that the information is not available or that you are unsure. 
+            For example, if the user asks "What is the size of the PILOT (payment in lieu of taxes) payed by Hartwell"
+            and you can find information on "PILOT" but not "Hartwell", state you are unsure.
             """
         ),
         ("user", "{input}"),
