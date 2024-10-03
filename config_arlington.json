@@ -1,0 +1,28 @@
+{
+    "title": "Arlington Budget Chatbot",
+    "townName": "Arlington",
+    "assistantAvatar": "https://brainana.github.io/ArlingtonMABudgetDocs/images/arlington_logo.png",
+    "chatInputPlaceholder": "What is your question about Arlington budget?", 
+    "sampleQuestions": [
+        "What's the total education budget?",
+        "What is the total revenue and what components contribute to it?",
+        "How does this year's budget compare to last year's?"
+    ],
+    "model": "gpt-4o-2024-05-13",
+    "currentFY": "FY2025",
+    "townSpecificSystemInstruction": "Budget info for one year can be found in documents from subsequent years up to 4 years after. For example, a data point for FY2022 can be found in docs from FY2022 to FY2025. Prioritize using data from more recent years to form your answer, since actual figures rather than projected figures are more likely to be found in more recent documents.",
+    "historicalDataYears": 4,
+    "tools": [
+        {
+            "className": "GeneralBudgetTool",
+            "args": {
+                "chromaDbDir": "chromadb_arlington",
+                "collectionName": "lc_chroma_arlingtonbudget",
+                "metadataFilePath": "./scripts/arlington_vector_metadata.json",
+                "docLocation": "https://brainana.github.io/ArlingtonMABudgetDocs/"
+            }
+        }
+    ],
+    "debug": false,
+    "UITest": false
+}

@@ -1,0 +1,38 @@
+{
+    "title": "Lexington Budget Chatbot",
+    "townName": "Lexington",
+    "assistantAvatar": "./images/minuteman_icon.svg",
+    "chatInputPlaceholder": "What is your question about Lexington budget?", 
+    "sampleQuestions": [
+        "What are the major revenue sources?",
+        "What's the current balance of the capital stabilization fund?",
+        "How does the current budget compare to that of five years ago?"
+    ],
+    "model": "gpt-4o-2024-05-13",
+    "currentFY": "FY2025",
+    "townSpecificSystemInstruction": "Budget info for one year can be found in documents from subsequent years up to 4 years after. For example, a data point for FY2022 can be found in docs from FY2022 to FY2025. Prioritize using data from more recent years to form your answer, since actual figures rather than projected figures are more likely to be found in more recent documents. If any required term is missing, clearly state that the information is not available or that you are unsure. For example, if the user asks 'What is the size of the PILOT (payment in lieu of taxes) payed by Hartwell', and you can find information on 'PILOT' but not 'Hartwell', state you are unsure.",
+    "historicalDataYears": 4,
+    "tools": [
+        {
+            "className": "GeneralBudgetTool",
+            "args": {
+                "chromaDbDir": "chromadb",
+                "collectionName": "lc_chroma_lexbudget",
+                "metadataFilePath": "./scripts/vector_metadata.json",
+                "docLocation": "https://brainana.github.io/LexBudgetDocs/"
+            }
+        },
+        {
+            "className": "SchoolTool",
+            "args": {
+                "chromaDbDir": "chromadb",
+                "collectionName": "lc_chroma_schoolbudget",
+                "metadataFilePath": "./scripts/school_docs_metadata.json",
+                "docLocation": "https://brainana.github.io/LexBudgetDocs/"                
+            }
+
+        }
+    ],
+    "debug": false,
+    "UITest": false
+}
