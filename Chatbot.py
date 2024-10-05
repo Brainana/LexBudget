@@ -40,7 +40,7 @@ button {
 
 # Get the specific configuration for the app
 appConfig = None
-with open("./config_arlington.json", 'r') as file:
+with open("./config.json", 'r') as file:
     appConfig = json.load(file)
 
 # Get the debug configuration mode

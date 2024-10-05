@@ -21,16 +21,6 @@
                 "metadataFilePath": "./scripts/vector_metadata.json",
                 "docLocation": "https://brainana.github.io/LexBudgetDocs/"
             }
-        },
-        {
-            "className": "SchoolTool",
-            "args": {
-                "chromaDbDir": "chromadb",
-                "collectionName": "lc_chroma_schoolbudget",
-                "metadataFilePath": "./scripts/school_docs_metadata.json",
-                "docLocation": "https://brainana.github.io/LexBudgetDocs/"                
-            }
-
         }
     ],
     "debug": false,
