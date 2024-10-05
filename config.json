@@ -19,7 +19,7 @@
                 "chromaDbDir": "chromadb",
                 "collectionName": "lc_chroma_lexbudget",
                 "metadataFilePath": "./scripts/vector_metadata.json",
-                "docLocation": "https://brainana.github.io/LexBudgetDocs/"
+                "docLocation": "https://lexbudget.org/chatbot/"
             }
         }
     ],
