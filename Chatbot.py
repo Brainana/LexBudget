@@ -1,6 +1,5 @@
 from openai import OpenAI
 import streamlit as st
-import configparser
 import time
 from datetime import datetime
 import pytz
@@ -13,9 +12,7 @@ from streamlit_javascript import st_javascript
 from langchain_openai import ChatOpenAI
 from langchain_community.vectorstores import Chroma
 from langchain_openai import OpenAIEmbeddings
-from langchain_core.runnables import RunnableParallel, RunnablePassthrough
 from langchain_core.pydantic_v1 import BaseModel
-from langchain_core.output_parsers import StrOutputParser
 # import libraries for ReACT
 from langchain.tools import BaseTool
 from langchain.agents.format_scratchpad.openai_tools import format_to_openai_tool_messages
@@ -26,10 +23,6 @@ from langchain_core.messages import HumanMessage, AIMessage
 import asyncio
 # import libraries for metadata
 import json
-# import regex library
-import re
-# import serialization/deserialization library
-import pickle
 # import for structured response
 from langchain_core.pydantic_v1 import BaseModel
 
@@ -46,21 +39,22 @@ button {
 )
 
 # Get the specific configuration for the app
-config = configparser.ConfigParser()
-config.read('config.ini')
+appConfig = None
+with open("./config_arlington.json", 'r') as file:
+    appConfig = json.load(file)
 
 # Get the debug configuration mode
-debug = config.get('Server', 'debug')
+debug = appConfig["debug"]
 
 # Set page title
-st.title(config.get('Template', 'title'))
+st.title(appConfig["title"])
 # st.markdown('Using LangChain framework + ChromaDB w/ metadata + OpenAI Chat Completions API')
 
 # Initialize OpenAI client with your own API key
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # llm model version
-model = "gpt-4o-2024-05-13"
+model = appConfig["model"]
 
 # Initialize feedback collector
 collector = FeedbackCollector(
@@ -69,47 +63,11 @@ collector = FeedbackCollector(
     password=st.secrets.TRUBRICS_PASSWORD,
 )
 
-# load metadata
-metadata = None
-schoolMetadata = None
-with open("./scripts/vector_metadata.json", 'r') as file:
-    metadata = json.load(file)
-with open("./scripts/school_docs_metadata.json", 'r') as file:
-    schoolMetadata = json.load(file)
-
 def getUpdatedTime(item):
     return item[1]["updated_time"]
 
-# sort docs by recency, then pull latest brown book to get latest fiscal year
-metadata = dict(sorted(metadata.items(), key=getUpdatedTime, reverse=True))
-schoolMetadata = dict(sorted(schoolMetadata.items(), key=getUpdatedTime, reverse=True))
-latestBrownBook = next(iter(metadata))
-currentFY = latestBrownBook[:6]
-
 # initialize message placeholder
 message_placeholder = None
-
-# info from one year can be found in docs from later years -> update years list: e.g. an FY2022 answer may be found in the FY2022-FY2025 document
-def modifyYears(years):
-    newYearNums = set()
-    for year in years:
-        currYear = (int)(year[2:])
-        for i in range(0,4):
-            newYearNums.add(currYear+i)
-
-    modifiedYears = set()  
-    for yearNum in newYearNums:
-        year = "FY" + str(yearNum) + ".pdf"
-        if year in metadata:
-            modifiedYears.add(year[:-4])
-    
-    return modifiedYears
-
-def getSchoolDocYears():
-    schoolDocYears = []
-    for year in schoolMetadata:
-        schoolDocYears.append(year[0:6])
-    return schoolDocYears
 
 # get client ip
 def client_ip():
@@ -156,31 +114,8 @@ def convert_to_est(unix_timestamp):
     est_datetime = utc_datetime.replace(tzinfo=pytz.utc).astimezone(est_timezone)
     return est_datetime.strftime('%B %d, %Y %H:%M:%S %Z')
 
-# serialize object to pickle file
-def serialize(obj, path):
-    with open(path, 'wb') as file:
-        pickle.dump(obj, file)
-
-# deserialize pickle file to object
-def deserialize(path):
-    with open(path, 'rb') as file:
-       return  pickle.load(file)
-
-# Cache the thread on session state, so we don't keep creating
-# new thread for the same browser session
-thread = None
-if "openai_thread" not in st.session_state:
-    thread = client.beta.threads.create()
-    st.session_state["openai_thread"] = thread
-else:
-    thread = st.session_state["openai_thread"]
-
-# Get all previous messages in session state
-if "reactMessages" not in st.session_state:
-    st.session_state.reactMessages = []
-
-# construct chat history string
-chat_history = []
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
 # get last query from session state
 lastQuery = ""
@@ -188,9 +123,6 @@ if "lastQuery" in st.session_state:
     lastQuery = st.session_state.lastQuery
 
 embeddings = OpenAIEmbeddings()
-
-brownBookCollection = Chroma(persist_directory="chromadb", embedding_function=embeddings, collection_name="lc_chroma_lexbudget")
-schoolCollection = Chroma(persist_directory="chromadb", embedding_function=embeddings, collection_name="lc_chroma_schoolbudget")
 
 st.session_state.debugText = ""
 
@@ -203,9 +135,9 @@ def determineYears():
 
     yearQuery = f"""
     {lastQuerySection}
-    given the current user query: {chat_history[-1]}
+    given the current user query: {st.session_state.chat_history[-1]}
     What fiscal year or years is the user asking about? Years are typically in the format "YYYY" (e.g. 2024). Give your answer in the format 'FY____, FY____, ...' with nothing else. 
-    If the user didn't specify a year or says 'current', assume they are talking about {currentFY}."""
+    If the user didn't specify a year or says 'current', assume they are talking about {appConfig["currentFY"]}."""
 
     years = client.chat.completions.create(
         messages=[{"role": "user", "content": yearQuery}],
@@ -219,6 +151,23 @@ Determine years of query: {yearQuery}\n
     """
     return years
 
+# info from one year can be found in docs from later years -> update years list: e.g. an FY2022 answer may be found in the FY2022-FY2025 document
+def modifyYears(years, metadata):
+    historicalDataYears = appConfig['historicalDataYears']
+    newYearNums = set()
+    for year in years:
+        currYear = (int)(year[2:])
+        for i in range(0,historicalDataYears):
+            newYearNums.add(currYear+i)
+
+    modifiedYears = set()  
+    for yearNum in newYearNums:
+        year = "FY" + str(yearNum) + ".pdf"
+        if year in metadata:
+            modifiedYears.add(year[:-4])
+    
+    return modifiedYears
+
 # rephrase user query to explicitly restate userQuery -> similarity search is more accurate
 def rephraseQuery(query, years):
 
@@ -227,9 +176,10 @@ def rephraseQuery(query, years):
         lastQuerySection = f"There may be additional required context that is found in the previous user query: {lastQuery}"
     rephrasedQuery = f"""
     Rephrase the following query:
-    {chat_history[-1].content}
+    {st.session_state.chat_history[-1].content}
     Such that it queries about the following year(s):
     {years}
+    Also, replace "Lexington, MA" with "town of Lexington" in the query.
     {lastQuerySection}
     """
 
@@ -249,7 +199,7 @@ Rephrase this query: {rephrasedQuery}\n
 
     return rephrasedPrompt
 
-def getVectorText(collection, metadata, rephrasedQuery, years):
+def getVectorText(collection, metadata, rephrasedQuery, years, docLocation):
     # creating metadata filter that only searches documents in the relevant years
     years = list(filter(lambda year : year + ".pdf" in metadata, years))
     metadataFilter = None
@@ -291,7 +241,7 @@ metadata filter:
     for index, doc in enumerate(top_vectors):
         source = doc[0].metadata['source'].replace("\\","/")
         page = str(doc[0].metadata['page']+1)
-        link = "<a href='https://brainana.github.io/LexBudgetDocs/" + source + "#page=" + page + "'>" + source + " (page " + page + ")</a>"
+        link = "<a href='" + docLocation + source + "#page=" + page + "'>" + source + " (page " + page + ")</a>"
         # context += "Please exactly reference the following link in the generated response: " + link + " if the following content is used to generate the response: " + doc[0].page_content + "\n"
         context += "vector #: " + str(index + 1) + "\n\nSimilarity search score: " + str(doc[1]) + "\n\nReference link: " + link + "\n\nText: " + doc[0].page_content + "\n\n"
         references += link
@@ -315,15 +265,40 @@ async def awaitable_function(obj):
 
 class SchoolTool(BaseTool):
     name = "school_budget_search"
-    description = "Good for answering questions about the school or education budget for " + ', '.join(getSchoolDocYears()) + ". For budget inquiries pertaining to other years, we recommend utilizing the General Budget Search tool."
+    description: str = None
+    collection: Chroma = None
+    metadata: dict = None
+    docLocation: str = None
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.collection = Chroma(
+            persist_directory = kwargs.get('chromaDbDir'),
+            embedding_function = embeddings,
+            collection_name = kwargs.get('collectionName')
+        )
+
+        with open(kwargs.get('metadataFilePath'), 'r') as file:
+            self.metadata = json.load(file)
+        self.metadata = dict(sorted(self.metadata.items(), key=getUpdatedTime, reverse=True))
+
+        self.description = description = "Good for answering questions about the school or education budget for " + ', '.join(self.getSchoolDocYears()) + ". For budget inquiries pertaining to other years, we recommend utilizing the General Budget Search tool."
+
+        self.docLocation = kwargs.get('docLocation')
+
+    def getSchoolDocYears(self):
+        schoolDocYears = []
+        for year in self.metadata:
+            schoolDocYears.append(year[0:6])
+        return schoolDocYears
+    
     def _helper(self, query):
         st.session_state.debugText += f"""Key idea extracted by agent:
     {query}\n
         """
         years = determineYears()
         rephrasedQuery = rephraseQuery(query, years)
-        return getVectorText(schoolCollection, schoolMetadata, rephrasedQuery, years)
+        return getVectorText(self.collection, self.metadata, rephrasedQuery, years, self.docLocation)
 
     def _run(self, query):
         return self._helper(query)
@@ -333,9 +308,27 @@ class SchoolTool(BaseTool):
         return awaitable_function(vectorText)
 
 
-class BrownBookTool(BaseTool):
+class GeneralBudgetTool(BaseTool):
     name = "general_budget_search"
     description = "Good for answering general budget questions."
+    collection: Chroma = None
+    metadata: dict = None
+    docLocation: str = None
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self.collection = Chroma(
+            persist_directory = kwargs.get('chromaDbDir'),
+            embedding_function = embeddings,
+            collection_name = kwargs.get('collectionName')
+        )
+
+        with open(kwargs.get('metadataFilePath'), 'r') as file:
+            self.metadata = json.load(file)
+        self.metadata = dict(sorted(self.metadata.items(), key=getUpdatedTime, reverse=True))
+
+        self.docLocation = kwargs.get('docLocation')
 
     def _helper(self, query):
         st.session_state.debugText += f"""Key idea extracted by agent:
@@ -344,8 +337,8 @@ class BrownBookTool(BaseTool):
         years = determineYears()
         rephrasedQuery = rephraseQuery(query, years)
         # info from one year can be found in docs from later years -> update years list: e.g. an FY2022 answer may be found in the FY2022-FY2025 document
-        years = list(modifyYears(years))
-        return getVectorText(brownBookCollection, metadata, rephrasedQuery, years)
+        years = list(modifyYears(years, self.metadata))
+        return getVectorText(self.collection, self.metadata, rephrasedQuery, years, self.docLocation)
 
     def _run(self, query):
         return self._helper(query)
@@ -353,11 +346,20 @@ class BrownBookTool(BaseTool):
     def _arun(self, query):
         vectorText = self._helper(query)
         return awaitable_function(vectorText)
+    
+# Function to instantiate a class by name
+def instantiate_class(class_name, **kwargs):
+    # Check if the class is defined in the global scope
+    cls = globals().get(class_name)
+    if cls is None:
+        raise NameError(f"Class '{class_name}' is not defined.")
+    # Create an instance of the class
+    return cls(**kwargs)
 
-schoolTool = SchoolTool()
-brownBookTool = BrownBookTool()
-# tools = [schoolTool, brownBookTool]
-tools = [brownBookTool]
+tools = []
+for index, toolConfig in enumerate(appConfig["tools"]):
+    tool = instantiate_class(toolConfig["className"], **toolConfig["args"])
+    tools.append(tool)
 
 llm = ChatOpenAI(temperature=0, model_name=model)
 llm_with_tools = llm.bind_tools(tools)
@@ -366,22 +368,16 @@ prompt = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            """You are a financial assistant that is very knowledgable on the budget of the town of Lexington.
+            f"""You are a financial assistant that is very knowledgable on the budget of the town of {appConfig['townName']}.
 
             Generate your prompt by priotizing the vectors with the highest similarity score.
             Ensure the response reflects the content of the search vector that matches most closely to the input query.
 
             If the user inquires about percentages, prioritize providing the direct percentage number from the document rather than calculating it.
 
-            Budget info for one year can be found in documents from subsequent years up to 4 years after. 
-            For example, a data point for FY2022 can be found in docs from FY2022 to FY2025.
-            Prioritize using data from more recent years to form your answer, since actual figures rather than projected figures are more likely to be found in more recent documents.
+            {appConfig['townSpecificSystemInstruction']}
 
             Please link the vectors you used to generate your response.
-
-            If any required term is missing, clearly state that the information is not available or that you are unsure. 
-            For example, if the user asks "What is the size of the PILOT (payment in lieu of taxes) payed by Hartwell"
-            and you can find information on "PILOT" but not "Hartwell", state you are unsure.
             """
         ),
         ("user", "{input}"),
@@ -407,12 +403,12 @@ agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, handle_pa
     {"run_name": "Agent"}
 )
 
-async def runAgent(userQuery, chat_history):
+async def runAgent(userQuery):
     st.session_state.debugText = ""
     st.session_state.full_response = ""
 
     async for event in agent_executor.astream_events(
-        {"input": userQuery, "chat_history": chat_history},
+        {"input": userQuery, "chat_history": st.session_state.chat_history},
         version="v1",
     ):
         kind = event["event"]
@@ -423,7 +419,7 @@ async def runAgent(userQuery, chat_history):
         elif kind == "on_chain_end":
             if event["name"] == "Agent":
                 st.session_state.debugText += f"Ending agent: {event['name']} with input: {event['data'].get('output')['output']}\n"
-                chat_history.append(AIMessage(content=st.session_state.full_response))
+                st.session_state.chat_history.append(AIMessage(content=st.session_state.full_response))
         elif kind == "on_chat_model_stream":
             content = event["data"]["chunk"].content
             if content:
@@ -438,12 +434,7 @@ async def runAgent(userQuery, chat_history):
         elif kind == "on_tool_end":
             st.session_state.debugText += f"\nEnding tool: {event['name']}\n--\n\n"
 
-# listIcons = [
-#     ":large_green_circle:",
-#     ":large_green_circle:",
-#     ":large_green_circle:"
-# ]
-sampleQuestions = config.get('Template', 'sampleQuestions').split('|')
+sampleQuestions = appConfig['sampleQuestions']
 st.markdown('<p style="font-size: 18px;"><b><i>Sample questions that you could try:</i></b></p>', unsafe_allow_html=True)
 questionBtns = []
 for index, question in enumerate(sampleQuestions):
@@ -468,7 +459,7 @@ class FollowUpQuestions(BaseModel):
 def suggest_follow_ups():
 
     follow_up_query = f"""
-    Given this chat history {chat_history[-2:]}, Suggest 2 follow-up questions the user 
+    Given this chat history {st.session_state.chat_history[-2:]}, Suggest 2 follow-up questions the user 
     might ask next."""
 
     structured_llm = llm.with_structured_output(FollowUpQuestions)
@@ -484,10 +475,7 @@ def display_follow_ups():
         follow_up_btns.append(st.button(f"{follow_up}", on_click=click_follow_up, args=[follow_up]))
 
 def answerQuery(userQuery):
-    chat_history.append(HumanMessage(content=userQuery))
-
-    # User has entered a question -> save it to the session state 
-    st.session_state.reactMessages.append({"role": "user", "type": "message", "content": userQuery})
+    st.session_state.chat_history.append(HumanMessage(content=userQuery))
 
     # Copy the user's question in the chat window
     with st.chat_message("user"):
@@ -505,7 +493,7 @@ def answerQuery(userQuery):
 
         full_response = ""
 
-        asyncio.run(runAgent(userQuery, chat_history))
+        asyncio.run(runAgent(userQuery))
        
         message_placeholder.markdown(st.session_state.full_response, unsafe_allow_html=True)
         # debugExpander = st.expander("Langchain Agent Steps (for debugging)")
@@ -520,14 +508,9 @@ def answerQuery(userQuery):
             "query_time": f"{query_time:.2f} sec",
             "start_time": convert_to_est(start_time),
             "end_time": convert_to_est(end_time)
-            # "assistant_id": assistantId,
             # "user_ip": user_ip,
             # "user_agent": user_agent
         }
-
-        # Save the assistant's message in session state (we do this in addition to 
-        # saving the thread because we processed the message after retrieving it)
-        st.session_state.reactMessages.append({"role": "assistant",  "type": "message", "content": st.session_state.full_response})
 
         # log user query + assistant response + metadata 
         st.session_state.logged_prompt = collector.log_prompt(
@@ -565,21 +548,18 @@ def answerQuery(userQuery):
         #     st.form_submit_button('Submit', on_click=_submit_feedback)
 
 # Display all previous messages upon page refresh
-assistantAvatar = config.get('Template', 'assistantAvatar')
-numMsgs = len(st.session_state.reactMessages)
-for index,message in enumerate(st.session_state.reactMessages):
-    if message["type"] == "message":
-        if message["role"] == "assistant":
-            with st.chat_message(message["role"], avatar=assistantAvatar):
-                st.markdown(message["content"], unsafe_allow_html=True)
-                chat_history.append(AIMessage(content=message["content"]))
-        else:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"], unsafe_allow_html=True)
-                chat_history.append(HumanMessage(content=message["content"]))
+assistantAvatar = appConfig['assistantAvatar']
+numMsgs = len(st.session_state.chat_history)
+for index,message in enumerate(st.session_state.chat_history):
+    if isinstance(message, AIMessage):
+        with st.chat_message("assistant", avatar=assistantAvatar):
+            st.markdown(message.content, unsafe_allow_html=True)
+    else:
+        with st.chat_message("user"):
+            st.markdown(message.content, unsafe_allow_html=True)
 
 # Display the input text box
-chatInputPlaceholder = config.get('Template', 'chatInputPlaceholder')
+chatInputPlaceholder = appConfig['chatInputPlaceholder']
 if userQuery := st.chat_input(chatInputPlaceholder):
     answerQuery(userQuery)
 
