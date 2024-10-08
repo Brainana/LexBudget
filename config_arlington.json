@@ -2,7 +2,7 @@
     "title": "Arlington Budget Chatbot",
     "townName": "Arlington",
     "assistantAvatar": "https://brainana.github.io/ArlingtonMABudgetDocs/images/arlington_logo.png",
-    "chatInputPlaceholder": "What is your question about Arlington budget?", 
+    "chatInputPlaceholder": "Enter your question here", 
     "sampleQuestions": [
         "What's the total education budget?",
         "What is the total revenue and what components contribute to it?",
