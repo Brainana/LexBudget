@@ -16,3 +16,6 @@ coverage.xml
 
 # avoid accidentally checking in API key
 .streamlit/secrets.toml
+
+# ignore directories
+chromadb_arlington/

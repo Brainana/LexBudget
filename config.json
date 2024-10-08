@@ -2,7 +2,7 @@
     "title": "Lexington Budget Chatbot",
     "townName": "Lexington",
     "assistantAvatar": "./images/minuteman_icon.svg",
-    "chatInputPlaceholder": "What is your question about Lexington budget?", 
+    "chatInputPlaceholder": "Enter your question here", 
     "sampleQuestions": [
         "What are the major revenue sources?",
         "What's the current balance of the capital stabilization fund?",
@@ -21,6 +21,16 @@
                 "metadataFilePath": "./scripts/vector_metadata.json",
                 "docLocation": "https://lexbudget.org/chatbot/"
             }
+        },
+        {
+            "className": "SchoolTool",
+            "args": {
+                "chromaDbDir": "chromadb",
+                "collectionName": "lc_chroma_schoolbudget",
+                "metadataFilePath": "./scripts/school_docs_metadata.json",
+                "docLocation": "https://lexbudget.org/chatbot/"                
+            }
+
         }
     ],
     "debug": false,
