@@ -49,9 +49,7 @@ with col2_sub:
     col2_sub.write("Neerja Bajaj")
     
 
-
-img = Image.open("images/teamlogo.png")
-col2.image( img ,  width = 200 , channels = "BGR")
+col2.markdown('<a href="https://lexyouthstem.org/" target="_blank"><img src="https://brainana.github.io/LexBudgetDocs/images/teamlogo.png" width="200"></a>', unsafe_allow_html=True)
 
 
 
