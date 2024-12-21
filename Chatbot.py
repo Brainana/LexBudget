@@ -1,3 +1,4 @@
+import os
 from openai import OpenAI
 import streamlit as st
 import time
@@ -51,7 +52,8 @@ st.title(appConfig["title"])
 # st.markdown('Using LangChain framework + ChromaDB w/ metadata + OpenAI Chat Completions API')
 
 # Initialize OpenAI client with your own API key
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+openai_api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=openai_api_key)
 
 # llm model version
 model = appConfig["model"]
