@@ -1,19 +1,19 @@
 echo "\
 [general]\n\
 email = \"your-email@domain.com\"\n\
-" > ~/.streamlit/credentials.toml
+" > /app/.streamlit/credentials.toml
 
 echo "\
 [server]\n\
 headless = true\n\
 enableCORS=false\n\
 port = $PORT\n\
-" >> ~/.streamlit/config.toml
+" >> /app/.streamlit/config.toml
 
-sed -i "s/your-api-key-here/$OPENAI_API_KEY/" ./.streamlit/secrets.toml
-sed -i "s/your-claude-api-key-here/$CLAUDE_API_KEY/" ./.streamlit/secrets.toml
-sed -i "s/your-trubrics-email-here/$TRUBRICS_EMAIL/" ./.streamlit/secrets.toml
-sed -i "s/your-trubrics-pswd-here/$TRUBRICS_PASSWORD/" ./.streamlit/secrets.toml
+sed -i "s/your-api-key-here/$OPENAI_API_KEY/" /app/.streamlit/secrets.toml
+sed -i "s/your-claude-api-key-here/$CLAUDE_API_KEY/" /app/.streamlit/secrets.toml
+sed -i "s/your-trubrics-email-here/$TRUBRICS_EMAIL/" /app/.streamlit/secrets.toml
+sed -i "s/your-trubrics-pswd-here/$TRUBRICS_PASSWORD/" /app/.streamlit/secrets.toml
 
 
 
