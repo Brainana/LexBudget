@@ -179,8 +179,14 @@ def rephraseQuery(query, years):
     rephrasedQuery = f"""
     Rephrase the following query:
     {st.session_state.chat_history[-1].content}
-    Such that it queries about the following year(s):
-    {years}
+    """
+    if years is not None:
+        rephrasedQuery += f"""
+        Such that it queries about the following year(s):
+        {years}
+        """
+
+    rephrasedQuery += f"""
     Also, replace "Lexington, MA" with "town of Lexington" in the query.
     {lastQuerySection}
     """
@@ -201,7 +207,38 @@ Rephrase this query: {rephrasedQuery}\n
 
     return rephrasedPrompt
 
-def getVectorText(collection, metadata, rephrasedQuery, years, docLocation):
+def getVectorText(collection, rephrasedQuery, docLocation):
+    vectors = collection.similarity_search_with_relevance_scores(rephrasedQuery, k=6)
+
+    # sort docs by updated time + relevance score
+    top_vectors = sorted(vectors, key=lambda vector: -vector[1])
+
+    # get context from docs
+    context = ""
+    references = ""
+    for index, doc in enumerate(top_vectors):
+        source = doc[0].metadata['source'].replace("\\","/")
+        page = str(doc[0].metadata['page']+1)
+        link = "<a href='" + docLocation + source + "#page=" + page + "'>" + source + " (page " + page + ")</a>"
+        # context += "Please exactly reference the following link in the generated response: " + link + " if the following content is used to generate the response: " + doc[0].page_content + "\n"
+        context += "vector #: " + str(index + 1) + "\n\nSimilarity search score: " + str(doc[1]) + "\n\nReference link: " + link + "\n\nText: " + doc[0].page_content + "\n\n"
+        references += link
+    
+    # with st.expander("(for debugging)"):
+    #     st.markdown(st.session_state.debugText, unsafe_allow_html=True)
+    # with st.expander("Most Relevant Chunks w/ Similarity Score (for debugging)"):
+    #     st.write(top_vectors)
+    # with st.expander("Links to Relevant Chunks (for debugging)"):
+    #     st.markdown(references, unsafe_allow_html=True)
+
+    st.session_state.debugText += f"""
+References:
+    {references}\n
+    """
+    
+    return context
+
+def getVectorTextWithMetadataFiltering(collection, metadata, rephrasedQuery, years, docLocation):
     # creating metadata filter that only searches documents in the relevant years
     years = list(filter(lambda year : year + ".pdf" in metadata, years))
     metadataFilter = None
@@ -265,6 +302,40 @@ References:
 async def awaitable_function(obj):
     return obj
 
+class GeneralDocsTool(BaseTool):
+    name = "general_docs_search"
+    description: str = None
+    collection: Chroma = None
+    docLocation: str = None
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.collection = Chroma(
+            persist_directory = kwargs.get('chromaDbDir'),
+            embedding_function = embeddings,
+            collection_name = kwargs.get('collectionName')
+        )
+
+        self.description = kwargs.get('description')
+
+        self.docLocation = kwargs.get('docLocation')
+    
+    def _helper(self, query):
+        st.session_state.debugText += f"""Key idea extracted by agent:
+    {query}\n
+        """
+        # years = determineYears()
+        rephrasedQuery = rephraseQuery(query, None)
+        return getVectorText(self.collection, rephrasedQuery, self.docLocation)
+
+    def _run(self, query):
+        return self._helper(query)
+    
+    def _arun(self, query):
+        vectorText = self._helper(query)
+        return awaitable_function(vectorText)
+
+
 class SchoolTool(BaseTool):
     name = "school_budget_search"
     description: str = None
@@ -300,7 +371,7 @@ class SchoolTool(BaseTool):
         """
         years = determineYears()
         rephrasedQuery = rephraseQuery(query, years)
-        return getVectorText(self.collection, self.metadata, rephrasedQuery, years, self.docLocation)
+        return getVectorTextWithMetadataFiltering(self.collection, self.metadata, rephrasedQuery, years, self.docLocation)
 
     def _run(self, query):
         return self._helper(query)
@@ -340,7 +411,7 @@ class GeneralBudgetTool(BaseTool):
         rephrasedQuery = rephraseQuery(query, years)
         # info from one year can be found in docs from later years -> update years list: e.g. an FY2022 answer may be found in the FY2022-FY2025 document
         years = list(modifyYears(years, self.metadata))
-        return getVectorText(self.collection, self.metadata, rephrasedQuery, years, self.docLocation)
+        return getVectorTextWithMetadataFiltering(self.collection, self.metadata, rephrasedQuery, years, self.docLocation)
 
     def _run(self, query):
         return self._helper(query)
@@ -379,7 +450,7 @@ prompt = ChatPromptTemplate.from_messages(
 
             {appConfig['townSpecificSystemInstruction']}
 
-            Please link the vectors you used to generate your response.
+            Please add all reference links of the vectors you used to generate your response.
             """
         ),
         ("user", "{input}"),
