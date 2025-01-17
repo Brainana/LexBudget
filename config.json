@@ -4,10 +4,10 @@
     "assistantAvatar": "./images/minuteman_icon.svg",
     "chatInputPlaceholder": "Enter your question here", 
     "sampleQuestions": [
-        "What is the estimated cost of the new high school building project?",
-        "How does the cost of new Lexington high school compare to new school school projects in other towns in the area?",
-        "What are the main factors contributing to the high cost of the new Lexington high school project?",
-        "How will the town pay for the high school project?",
+        "What is the estimated cost of the new high school?",
+        "How does the cost of new Lexington high school compare to the cost of other schools in nearby towns?",
+        "What are the main factors contributing to the high cost of the new Lexington high school?",
+        "How will the town pay for the new high school?",
         "What are the major revenue sources?",
         "What's the current balance of the capital stabilization fund?",
         "How does the current budget compare to that of five years ago?"
