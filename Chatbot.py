@@ -585,24 +585,24 @@ def answerQuery(userQuery):
             # "user_agent": user_agent
         }
 
-        # log user query + assistant response + metadata 
-        st.session_state.logged_prompt = collector.log_prompt(
-            config_model={"model": model},
-            prompt=userQuery,
-            generation=full_response,
-            metadata=metadata
-        )
+        # # log user query + assistant response + metadata 
+        # st.session_state.logged_prompt = collector.log_prompt(
+        #     config_model={"model": model},
+        #     prompt=userQuery,
+        #     generation=full_response,
+        #     metadata=metadata
+        # )
 
-        # log user feedback
-        user_feedback = collector.st_feedback(
-            component="default",
-            feedback_type="thumbs",
-            open_feedback_label="[Optional] Provide additional feedback",
-            model=st.session_state.logged_prompt.config_model.model,
-            prompt_id=st.session_state.logged_prompt.id,
-            key="feedback_key",
-            align="flex-start"
-        )
+        # # log user feedback
+        # user_feedback = collector.st_feedback(
+        #     component="default",
+        #     feedback_type="thumbs",
+        #     open_feedback_label="[Optional] Provide additional feedback",
+        #     model=st.session_state.logged_prompt.config_model.model,
+        #     prompt_id=st.session_state.logged_prompt.id,
+        #     key="feedback_key",
+        #     align="flex-start"
+        # )
 
         st.session_state.follow_ups = []
 
