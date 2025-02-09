@@ -210,7 +210,7 @@ Rephrase this query: {rephrasedQuery}\n
 def getVectorText(collection, rephrasedQuery, docLocation):
     vectors = collection.similarity_search_with_relevance_scores(rephrasedQuery, k=6)
 
-    # sort docs by updated time + relevance score
+    # sort docs by relevance score
     top_vectors = sorted(vectors, key=lambda vector: -vector[1])
 
     # get context from docs
@@ -219,6 +219,9 @@ def getVectorText(collection, rephrasedQuery, docLocation):
     for index, doc in enumerate(top_vectors):
         source = doc[0].metadata['source'].replace("\\","/")
         page = str(doc[0].metadata['page']+1)
+        # if source.endswith("LHS_Building_Project_FAQ.pdf"):
+        #     link = "<a href='https://lhsproject.lexingtonma.org/projectfaqs'>"
+        # else:
         link = "<a href='" + docLocation + source + "#page=" + page + "'>" + source + " (page " + page + ")</a>"
         # context += "Please exactly reference the following link in the generated response: " + link + " if the following content is used to generate the response: " + doc[0].page_content + "\n"
         context += "vector #: " + str(index + 1) + "\n\nSimilarity search score: " + str(doc[1]) + "\n\nReference link: " + link + "\n\nText: " + doc[0].page_content + "\n\n"
@@ -443,7 +446,7 @@ prompt = ChatPromptTemplate.from_messages(
             "system",
             f"""You are a financial assistant that is very knowledgable on the budget of the town of {appConfig['townName']}.
 
-            Generate your prompt by priotizing the vectors with the highest similarity score.
+            Generate your response by priotizing the vectors with the highest similarity score.
             Ensure the response reflects the content of the search vector that matches most closely to the input query.
 
             If the user inquires about percentages, prioritize providing the direct percentage number from the document rather than calculating it.
