@@ -46,6 +46,7 @@ for index in range(len(vectors['ids'])):
         ids.append(vectors['ids'][index])
 
 if len(ids) > 0:
+    print("delete " + args.fileName + ": " + " ".join(ids))
     collection.delete(ids)
 
 # add updated file to database
