@@ -219,10 +219,10 @@ def getVectorText(collection, rephrasedQuery, docLocation):
     for index, doc in enumerate(top_vectors):
         source = doc[0].metadata['source'].replace("\\","/")
         page = str(doc[0].metadata['page']+1)
-        # if source.endswith("LHS_Building_Project_FAQ.pdf"):
-        #     link = "<a href='https://lhsproject.lexingtonma.org/projectfaqs'>"
-        # else:
-        link = "<a href='" + docLocation + source + "#page=" + page + "'>" + source + " (page " + page + ")</a>"
+        if source.endswith("LHS_Building_Project_FAQ.pdf"):
+            link = "<a href='https://lhsproject.lexingtonma.org/projectfaqs'>"
+        else:
+            link = "<a href='" + docLocation + source + "#page=" + page + "'>" + source + " (page " + page + ")</a>"
         # context += "Please exactly reference the following link in the generated response: " + link + " if the following content is used to generate the response: " + doc[0].page_content + "\n"
         context += "vector #: " + str(index + 1) + "\n\nSimilarity search score: " + str(doc[1]) + "\n\nReference link: " + link + "\n\nText: " + doc[0].page_content + "\n\n"
         references += link
