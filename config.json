@@ -5,13 +5,8 @@
     "chatInputPlaceholder": "Enter your question here", 
     "sampleQuestions": [
         "How much will the new high school building project cost?",
-        "What are the main factors contributing to the high cost of the new Lexington high school?",
-        "How long will the new high school building project take?",
-        "Why are we doing the new high school building project now?",
-        "How is the estimated cost for the new high school building project being determined?",
         "How will the Town pay for the new high school building project?",
         "How does the cost of new Lexington high school compare to the cost of other schools in nearby towns?",
-        "What is the expected impact of the new high school building project on taxpayers?",
         "Where are we in the process of the new school building project?"
     ],
     "model": "gpt-4o-2024-05-13",
