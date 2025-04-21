@@ -28,25 +28,17 @@ with col1_sub:
     col1_sub.markdown("### Team Members:")
 
     col1_sub.write("Jerry Xu (Project Lead)")
-    col1_sub.write("Kevin Zhu")
-    col1_sub.write("Jasmine Gu")
     col1_sub.write("Justin Wang")
-    col1_sub.write("Cassidy Xu")
-    col1_sub.write("Emma He")
-    col1_sub.write("Willam Yang")
-    col1_sub.write("Andrew Pan")
+    col1_sub.write("Jasmine Gu")
     col1_sub.write("Joley Leung (Graphics)")
 
 with col2_sub:
     col2_sub.markdown("### Mentors:")
 
-    col2_sub.write("Andrei Radulescu-Banu")
-    col2_sub.write("Chester Curme")
-    col2_sub.write("Jeannie Lu")
     col2_sub.write("Wei Ding")
-    col2_sub.write("John Truelove")
-    col2_sub.write("Nagarjuna Venna")
-    col2_sub.write("Neerja Bajaj")
+    col2_sub.write("Jeannie Lu")
+
+
     
 
 col2.markdown('<a href="https://lexyouthstem.org/" target="_blank"><img src="https://brainana.github.io/LexBudgetDocs/images/teamlogo.png" width="200"></a>', unsafe_allow_html=True)
