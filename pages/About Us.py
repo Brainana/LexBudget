@@ -12,12 +12,12 @@ col1.markdown("# Lexington Chatbot Team")
 col1.markdown("### Our Mission:")
 
 col1.write(
-    "Our mission is to improves accessibility, understanding, and engagement with the town budget for residents by implementing measures to "
-    "simplify technical language, condense the document length, enhance digital accessibility features, provide historical data and comparisons, and "
-    "establish clear avenues for community engagement and feedback. Second enhances transparency and community engagement in Lexington by utilizing "
-    "AI-generated transcriptions from town meeting recordings to provide detailed insights, including key topics, time allocation, public comments, and "
-    "feedback, thereby fostering a sense of community involvement and accountability. "
-    "The implementation of a chatbot will further facilitate easy interaction, allowing residents to ask specific questions and receive prompt replies."
+    "Our mission is to inform Lexington residents accurately by providing instant, well-cited answers to frequently asked questions about the "
+    "school building project, including financial details and voting logistics. Beyond delivering reliable information, the chatbot is designed to "
+    "raise awareness and boost engagement through its interactive interface, which prompts users with suggested follow-up questions to deepen "
+    "their understanding of key issues. Additionally, the tool will gather and analyze user feedback—tracking recurring questions, response satisfaction, "
+    "and knowledge gaps. By combining education, engagement, and data-driven insights, this project aims to foster an informed and participatory community "
+    "ahead of the vote."
 )
 col1.write("")
 
