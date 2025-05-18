@@ -1,0 +1,32 @@
+{
+    "title": "LHS Building Project",
+    "townName": "Lexington",
+    "assistantAvatar": "./images/minuteman_icon.svg",
+    "chatInputPlaceholder": "Enter your question here", 
+    "sampleQuestions": [
+        "How much will the new high school building project cost?",
+        "How will the Town pay for the new high school building project?",
+        "How does the cost of new Lexington high school compare to the cost of other schools in nearby towns?",
+        "Where are we in the process of the new school building project?"
+    ],
+    "model": "gpt-4o-2024-05-13",
+    "currentFY": "FY2025",
+    "townSpecificSystemInstruction": "Budget info for one year can be found in documents from subsequent years up to 4 years after. For example, a data point for FY2022 can be found in docs from FY2022 to FY2025. Prioritize using data from more recent years to form your answer, since actual figures rather than projected figures are more likely to be found in more recent documents. If any required term is missing, clearly state that the information is not available or that you are unsure. For example, if the user asks 'What is the size of the PILOT (payment in lieu of taxes) payed by Hartwell', and you can find information on 'PILOT' but not 'Hartwell', state you are unsure.",
+    "historicalDataYears": 4,
+    "chroma_host": "your-ip-here",
+    "chroma_port": "your-port-here",
+    "tools": [
+        {
+            "className": "GeneralDocsTool",
+            "args": {
+                "chromaDbDir": "testing_chromadb",
+                "collectionName": "lc_chroma_lhsproject",
+                "description": "Good for answering questions about the new high school building project",
+                "docLocation": "https://brainana.github.io/LexBudgetDocs/"                
+            }
+
+        }
+    ],
+    "debug": false,
+    "UITest": false
+}

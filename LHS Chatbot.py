@@ -216,8 +216,8 @@ def getVectorText(collection, rephrasedQuery, docLocation):
         include=["documents", "distances", "metadatas"]
     )
 
-    with st.expander("Most Relevant Chunks w/ Similarity Score (for debugging)"):
-        st.write(vectors)
+    # with st.expander("Most Relevant Chunks w/ Similarity Score (for debugging)"):
+    #     st.write(vectors)
 
     # get context from docs
     context = ""
@@ -316,7 +316,7 @@ References:
 async def awaitable_function(obj):
     return obj
 
-chroma_client = HttpClient(host=appConfig["chroma_host"], port=appConfig["chroma_port"])
+chroma_client = HttpClient(host=appConfig["chroma_host"], port=int(appConfig["chroma_port"]))
 
 class GeneralDocsTool(BaseTool):
     name: str = "general_docs_search"
