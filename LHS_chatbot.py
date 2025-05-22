@@ -42,10 +42,9 @@ button {
 
 #  Load vector source : link JSON file
 with open('./vectorsource_link.json', 'r', encoding='utf-8') as f:
-    vs_link_con = json.load(f)
+    vs_link_config = json.load(f)
 
-#  Create mapping from vector_source to link
-mapping = {item['vector_source']: item['link'] for item in vs_link_data}
+vs_link_mapping = {item['vector_source']: item['link'] for item in vs_link_config}
 
 # Get the specific configuration for the app
 appConfig = None
@@ -234,6 +233,9 @@ def getVectorText(collection, rephrasedQuery, docLocation):
         page = str(vectors["metadatas"][0][i]['page']+1)
         link = "<a href='" + docLocation + source + "#page=" + page + "'>" + source + " (page " + page + ")</a>"
         # context += "Please exactly reference the following link in the generated response: " + link + " if the following content is used to generate the response: " + doc[0].page_content + "\n"
+        if source in vs_link_mapping:
+            link = vs_link_mapping[source]
+
         context += (
             f"vector #: {i+1}\n\n"
             f"Similarity distance: {vectors['distances'][0][i]}\n\n"
