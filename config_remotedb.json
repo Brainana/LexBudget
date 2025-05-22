@@ -19,7 +19,6 @@
         {
             "className": "GeneralDocsTool",
             "args": {
-                "chromaDbDir": "testing_chromadb",
                 "collectionName": "lc_chroma_lhsproject",
                 "description": "Good for answering questions about the new high school building project",
                 "docLocation": "https://brainana.github.io/LexBudgetDocs/"                
