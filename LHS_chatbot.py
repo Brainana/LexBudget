@@ -239,7 +239,7 @@ def getVectorText(collection, rephrasedQuery, docLocation):
         context += (
             f"vector #: {i+1}\n\n"
             f"Similarity distance: {vectors['distances'][0][i]}\n\n"
-            f"Reference link: {link}{source} (page {page})</a>\n\n"
+            f"Reference link: {link}\n\n"
             f"Text: {vectors['documents'][0][i]}\n\n"
         )
         references += link
