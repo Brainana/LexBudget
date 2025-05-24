@@ -1,6 +1,9 @@
 """
 Usage:
-python scripts/create_chromadb_remote.py --inputDirectory /path/to/directory/ --collectionName name --chromaHost host --chromaPort port
+python scripts/create_chromadb_remote.py --inputDirectory /path/to/directory/ --fileName fileName --collectionName name --chromaHost host --chromaPort port
+
+Example:
+python scripts/create_chromadb_remote.py --inputDirectory "lhs_building_project_docs/websites docs" --fileName "lhs_project_faqs.pdf" --collectionName lc_chroma_lhsproject --chromaHost host --chromaPort port
 """
 
 import os
@@ -18,19 +21,19 @@ import json
 # get input directory
 parser = argparse.ArgumentParser()
 parser.add_argument("--inputDirectory", type=str, required=True)
+parser.add_argument("--fileName", type=str, required=False)
 parser.add_argument("--collectionName", type=str, required=True)
 parser.add_argument("--chromaHost", type=str, required=True)
 parser.add_argument("--chromaPort", type=int, required=True)
 args = parser.parse_args()
 
-# load metadata
-metadata = None
-if args.inputMetadataFile:
-    with open(args.inputMetadataFile, 'r') as file:
-        metadata = json.load(file)
-
-# get list of files in directory
-file_list = os.listdir(args.inputDirectory)
+file_list = []
+if args.fileName: 
+    # use the file the user inputed
+    file_list.append(args.fileName)
+else: 
+    # get list of files in directory
+    file_list = os.listdir(args.inputDirectory)
 
 # initialize OpenAI vector embeddings 
 openaiInst = OpenAI(api_key=st.secrets['OPENAI_API_KEY'])
