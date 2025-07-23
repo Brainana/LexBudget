@@ -5,6 +5,9 @@ import time
 from datetime import datetime
 import pytz
 from typing import List
+import chromadb
+from chromadb import HttpClient
+from chromadb.api.models.Collection import Collection
 # import libraries for user feedback
 from trubrics.integrations.streamlit import FeedbackCollector
 from streamlit_feedback import streamlit_feedback
@@ -13,7 +16,6 @@ from streamlit_javascript import st_javascript
 from langchain_openai import ChatOpenAI
 from langchain_community.vectorstores import Chroma
 from langchain_openai import OpenAIEmbeddings
-from langchain_core.pydantic_v1 import BaseModel
 # import libraries for ReACT
 from langchain.tools import BaseTool
 from langchain.agents.format_scratchpad.openai_tools import format_to_openai_tool_messages
@@ -26,6 +28,12 @@ import asyncio
 import json
 # import for structured response
 from langchain_core.pydantic_v1 import BaseModel
+import boto3
+import uuid
+
+# Initialize DynamoDB client and table globally
+dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
+chat_table = dynamodb.Table('lexbudget-chatbot-usage')
 
 st.markdown(
     """
@@ -41,7 +49,7 @@ button {
 
 # Get the specific configuration for the app
 appConfig = None
-with open("./config.json", 'r') as file:
+with open("./config_remotedb.json", 'r') as file:
     appConfig = json.load(file)
 
 # Get the debug configuration mode
@@ -57,13 +65,6 @@ client = OpenAI(api_key=openai_api_key)
 
 # llm model version
 model = appConfig["model"]
-
-# Initialize feedback collector
-collector = FeedbackCollector(
-    project="default",
-    email=st.secrets.TRUBRICS_EMAIL,
-    password=st.secrets.TRUBRICS_PASSWORD,
-)
 
 def getUpdatedTime(item):
     return item[1]["updated_time"]
@@ -208,26 +209,37 @@ Rephrase this query: {rephrasedQuery}\n
     return rephrasedPrompt
 
 def getVectorText(collection, rephrasedQuery, docLocation):
-    vectors = collection.similarity_search_with_relevance_scores(rephrasedQuery, k=6)
+    embedQuery =  embeddings.embed_query(rephrasedQuery)
+    vectors = collection.query(
+        query_embeddings=[embedQuery],
+        n_results=6,
+        include=["documents", "distances", "metadatas"]
+    )
 
-    # sort docs by updated time + relevance score
-    top_vectors = sorted(vectors, key=lambda vector: -vector[1])
+    # with st.expander("Most Relevant Chunks w/ Similarity Score (for debugging)"):
+    #     st.write(vectors)
 
     # get context from docs
     context = ""
     references = ""
-    for index, doc in enumerate(top_vectors):
-        source = doc[0].metadata['source'].replace("\\","/")
-        page = str(doc[0].metadata['page']+1)
+    for i in range(0, len(vectors["ids"][0])):
+        source = vectors["metadatas"][0][i]['source'].replace("\\","/")
+        page = str(vectors["metadatas"][0][i]['page']+1)
         link = "<a href='" + docLocation + source + "#page=" + page + "'>" + source + " (page " + page + ")</a>"
         # context += "Please exactly reference the following link in the generated response: " + link + " if the following content is used to generate the response: " + doc[0].page_content + "\n"
-        context += "vector #: " + str(index + 1) + "\n\nSimilarity search score: " + str(doc[1]) + "\n\nReference link: " + link + "\n\nText: " + doc[0].page_content + "\n\n"
+
+        context += (
+            f"vector #: {i+1}\n\n"
+            f"Similarity distance: {vectors['distances'][0][i]}\n\n"
+            f"Reference link: {link}\n\n"
+            f"Text: {vectors['documents'][0][i]}\n\n"
+        )
         references += link
     
     # with st.expander("(for debugging)"):
     #     st.markdown(st.session_state.debugText, unsafe_allow_html=True)
     # with st.expander("Most Relevant Chunks w/ Similarity Score (for debugging)"):
-    #     st.write(top_vectors)
+    #     st.write(vectors)
     # with st.expander("Links to Relevant Chunks (for debugging)"):
     #     st.markdown(references, unsafe_allow_html=True)
 
@@ -268,21 +280,29 @@ metadata filter:
     k = 4
     if len(years) > 1:
         k=4*len(years)
-    vectors = collection.similarity_search_with_relevance_scores(rephrasedQuery, k=k, filter=metadataFilter)
-
-    # sort docs by updated time + relevance score
-    top_vectors = sorted(vectors, key=lambda vector: (-vector[0].metadata['updated_time'], -vector[1]))
+    
+    embedQuery = embeddings.embed_query(rephrasedQuery)
+    top_vectors = collection.query(
+        query_embeddings=[embedQuery],
+        n_results=k,
+        where=metadataFilter,
+        include=["documents", "distances", "metadatas"]
+    )
 
     # get context from docs
     context = ""
     references = ""
-    # for doc in top_vectors:
-    for index, doc in enumerate(top_vectors):
-        source = doc[0].metadata['source'].replace("\\","/")
-        page = str(doc[0].metadata['page']+1)
+    for i in range(0, len(top_vectors["ids"][0])):
+        source = top_vectors["metadatas"][0][i]['source'].replace("\\","/")
+        page = str(top_vectors["metadatas"][0][i]['page']+1)
         link = "<a href='" + docLocation + source + "#page=" + page + "'>" + source + " (page " + page + ")</a>"
         # context += "Please exactly reference the following link in the generated response: " + link + " if the following content is used to generate the response: " + doc[0].page_content + "\n"
-        context += "vector #: " + str(index + 1) + "\n\nSimilarity search score: " + str(doc[1]) + "\n\nReference link: " + link + "\n\nText: " + doc[0].page_content + "\n\n"
+        context += (
+            f"vector #: {i+1}\n\n"
+            f"Similarity distance: {top_vectors['distances'][0][i]}\n\n"
+            f"Reference link: {link}\n\n"
+            f"Text: {top_vectors['documents'][0][i]}\n\n"
+        )
         references += link
     
     # with st.expander("(for debugging)"):
@@ -302,88 +322,11 @@ References:
 async def awaitable_function(obj):
     return obj
 
-class GeneralDocsTool(BaseTool):
-    name = "general_docs_search"
-    description: str = None
-    collection: Chroma = None
-    docLocation: str = None
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.collection = Chroma(
-            persist_directory = kwargs.get('chromaDbDir'),
-            embedding_function = embeddings,
-            collection_name = kwargs.get('collectionName')
-        )
-
-        self.description = kwargs.get('description')
-
-        self.docLocation = kwargs.get('docLocation')
-    
-    def _helper(self, query):
-        st.session_state.debugText += f"""Key idea extracted by agent:
-    {query}\n
-        """
-        # years = determineYears()
-        rephrasedQuery = rephraseQuery(query, None)
-        return getVectorText(self.collection, rephrasedQuery, self.docLocation)
-
-    def _run(self, query):
-        return self._helper(query)
-    
-    def _arun(self, query):
-        vectorText = self._helper(query)
-        return awaitable_function(vectorText)
-
-
-class SchoolTool(BaseTool):
-    name = "school_budget_search"
-    description: str = None
-    collection: Chroma = None
-    metadata: dict = None
-    docLocation: str = None
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.collection = Chroma(
-            persist_directory = kwargs.get('chromaDbDir'),
-            embedding_function = embeddings,
-            collection_name = kwargs.get('collectionName')
-        )
-
-        with open(kwargs.get('metadataFilePath'), 'r') as file:
-            self.metadata = json.load(file)
-        self.metadata = dict(sorted(self.metadata.items(), key=getUpdatedTime, reverse=True))
-
-        self.description = description = "Good for answering questions about the school or education budget for " + ', '.join(self.getSchoolDocYears()) + ". For budget inquiries pertaining to other years, we recommend utilizing the General Budget Search tool."
-
-        self.docLocation = kwargs.get('docLocation')
-
-    def getSchoolDocYears(self):
-        schoolDocYears = []
-        for year in self.metadata:
-            schoolDocYears.append(year[0:6])
-        return schoolDocYears
-    
-    def _helper(self, query):
-        st.session_state.debugText += f"""Key idea extracted by agent:
-    {query}\n
-        """
-        years = determineYears()
-        rephrasedQuery = rephraseQuery(query, years)
-        return getVectorTextWithMetadataFiltering(self.collection, self.metadata, rephrasedQuery, years, self.docLocation)
-
-    def _run(self, query):
-        return self._helper(query)
-    
-    def _arun(self, query):
-        vectorText = self._helper(query)
-        return awaitable_function(vectorText)
-
+chroma_client = HttpClient(host=appConfig["chroma_host"], port=int(appConfig["chroma_port"]))
 
 class GeneralBudgetTool(BaseTool):
-    name = "general_budget_search"
-    description = "Good for answering general budget questions."
+    name: str = None
+    description: str = None
     collection: Chroma = None
     metadata: dict = None
     docLocation: str = None
@@ -391,11 +334,11 @@ class GeneralBudgetTool(BaseTool):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.collection = Chroma(
-            persist_directory = kwargs.get('chromaDbDir'),
-            embedding_function = embeddings,
-            collection_name = kwargs.get('collectionName')
-        )
+        self.name = kwargs.get('name')
+
+        self.collection = chroma_client.get_collection(name=kwargs.get('collectionName'))
+
+        self.description = kwargs.get('description')
 
         with open(kwargs.get('metadataFilePath'), 'r') as file:
             self.metadata = json.load(file)
@@ -419,6 +362,7 @@ class GeneralBudgetTool(BaseTool):
     def _arun(self, query):
         vectorText = self._helper(query)
         return awaitable_function(vectorText)
+
     
 # Function to instantiate a class by name
 def instantiate_class(class_name, **kwargs):
@@ -443,7 +387,6 @@ prompt = ChatPromptTemplate.from_messages(
             "system",
             f"""You are a financial assistant that is very knowledgable on the budget of the town of {appConfig['townName']}.
 
-            Generate your prompt by priotizing the vectors with the highest similarity score.
             Ensure the response reflects the content of the search vector that matches most closely to the input query.
 
             If the user inquires about percentages, prioritize providing the direct percentage number from the document rather than calculating it.
@@ -547,36 +490,73 @@ def display_follow_ups():
     for follow_up in (st.session_state.follow_ups):
         follow_up_btns.append(st.button(f"{follow_up}", on_click=click_follow_up, args=[follow_up]))
 
+def save_chat_log(user_question, bot_response, metadata=None, feedback=None):
+    try:
+        item_id = str(uuid.uuid4())
+        item = {
+            'id': item_id,
+            'timestamp': datetime.utcnow().isoformat(),
+            'user_question': user_question,
+            'bot_response': bot_response
+        }
+        if metadata:
+            item['metadata'] = metadata
+        if feedback is not None:
+            item['feedback'] = feedback
+        chat_table.put_item(Item=item)
+        return item_id
+    except Exception as e:
+        print(f"Error saving chat log to DynamoDB: {e}")
+        return None
+
+def _submit_feedback():
+    """Callback function for feedback submission"""
+    # Get feedback directly from the text input using the key
+    feedback_text = st.session_state.get("feedback_text_key", '')
+    # Get thumbs feedback from streamlit_feedback
+    thumbs_feedback = st.session_state.get('feedback_thumbs_key', {})
+    item_id = st.session_state.get('last_item_id')
+    
+    if item_id:
+        # Update with both thumbs and text feedback as separate fields
+        update_expression = "SET"
+        expression_values = {}
+        
+        if feedback_text.strip():
+            update_expression += " text_feedback = :text_feedback,"
+            expression_values[':text_feedback'] = feedback_text
+        
+        if thumbs_feedback and 'score' in thumbs_feedback:
+            update_expression += " thumbs_score = :thumbs_score,"
+            expression_values[':thumbs_score'] = thumbs_feedback['score']
+        
+        # Remove trailing comma
+        update_expression = update_expression.rstrip(',')
+        
+        if update_expression != "SET":
+            chat_table.update_item(
+                Key={'id': item_id},
+                UpdateExpression=update_expression,
+                ExpressionAttributeValues=expression_values
+            )
+
 def answerQuery(userQuery):
     st.session_state.chat_history.append(HumanMessage(content=userQuery))
-
     # Copy the user's question in the chat window
     with st.chat_message("user"):
         st.markdown(userQuery)
-
     with st.chat_message("assistant", avatar=assistantAvatar):
-        
         global message_placeholder
         message_placeholder = st.empty()
-
         message_placeholder.markdown('Please wait...&nbsp;&nbsp;<img src="https://brainana.github.io/LexBudgetDocs/images/loading_icon.gif" width=25>', unsafe_allow_html=True)
-
         # Track query start time
         start_time = time.time()
-
         full_response = ""
-
         asyncio.run(runAgent(userQuery))
-       
         message_placeholder.markdown(st.session_state.full_response, unsafe_allow_html=True)
-        # debugExpander = st.expander("Langchain Agent Steps (for debugging)")
-        # debugExpanderText = debugExpander.text(st.session_state.debugText)
-
         # Track query end time
         end_time = time.time()
         query_time = end_time - start_time
-
-        # construct metadata to be logged
         metadata={
             "query_time": f"{query_time:.2f} sec",
             "start_time": convert_to_est(start_time),
@@ -585,40 +565,26 @@ def answerQuery(userQuery):
             # "user_agent": user_agent
         }
 
-        # # log user query + assistant response + metadata 
-        # st.session_state.logged_prompt = collector.log_prompt(
-        #     config_model={"model": model},
-        #     prompt=userQuery,
-        #     generation=full_response,
-        #     metadata=metadata
-        # )
-
-        # # log user feedback
-        # user_feedback = collector.st_feedback(
-        #     component="default",
-        #     feedback_type="thumbs",
-        #     open_feedback_label="[Optional] Provide additional feedback",
-        #     model=st.session_state.logged_prompt.config_model.model,
-        #     prompt_id=st.session_state.logged_prompt.id,
-        #     key="feedback_key",
-        #     align="flex-start"
-        # )
-
+        # Save chat log to DynamoDB and get the item ID
+        item_id = save_chat_log(userQuery, st.session_state.full_response, metadata)
+        # Store the item_id in session state for feedback
+        st.session_state.last_item_id = item_id
         st.session_state.follow_ups = []
-
         suggest_follow_ups()
+    
+        with st.form('form'):
+            streamlit_feedback(
+                feedback_type = "thumbs",
+                align = "flex-start",
+                key='feedback_thumbs_key'
+            )
+            st.text_input(
+                key = "feedback_text_key",
+                label = "Please elaborate on your response."
+            )
 
-        # with st.form('form'):
-        #     streamlit_feedback(
-        #         feedback_type = "thumbs",
-        #         align = "flex-start",
-        #         key='feedback_key'
-        #     )
-        #     st.text_input(
-        #         label="Please elaborate on your response.",
-        #         key="feedback_response"
-        #     )
-        #     st.form_submit_button('Submit', on_click=_submit_feedback)
+            # Only enable submit if thumbs or text feedback is present
+            st.form_submit_button('Submit', on_click=_submit_feedback)
 
 # Display all previous messages upon page refresh
 assistantAvatar = appConfig['assistantAvatar']
