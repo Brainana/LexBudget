@@ -9,7 +9,6 @@ import chromadb
 from chromadb import HttpClient
 from chromadb.api.models.Collection import Collection
 # import libraries for user feedback
-from trubrics.integrations.streamlit import FeedbackCollector
 from streamlit_feedback import streamlit_feedback
 from streamlit_javascript import st_javascript
 # import libraries for RAG + streaming
