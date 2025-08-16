@@ -3,6 +3,15 @@ import pytesseract
 from PIL import Image
 import io
 
+
+# =========================
+# install dependencies
+# 1.pip3 install pymupdf      
+# 2.pip install pytesseract  
+# 3.Download the Windows installer https://github.com/UB-Mannheim/tesseract/wiki
+# to run : LexBudget\scripts>python text-image-extraction.py
+# =========================
+
 # =========================
 # CONFIGURATION
 # =========================
